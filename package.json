@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test 'test/**/*.test.js'",
-    "package": "electron-packager . Quackers --platform=darwin --arch=arm64 --app-bundle-id=com.quackers.desktop --out=dist --overwrite && codesign --force --deep --sign - dist/Quackers-darwin-arm64/Quackers.app",
+    "package": "electron-packager . Quackers --platform=darwin --arch=arm64 --app-bundle-id=com.quackers.desktop --icon=assets/icon.icns --out=dist --overwrite && codesign --force --deep --sign - dist/Quackers-darwin-arm64/Quackers.app",
     "update-app": "bash tools/update-app.sh",
     "install-app": "npm run package && rm -rf ~/Applications/Quackers.app && cp -R dist/Quackers-darwin-arm64/Quackers.app ~/Applications/ && open ~/Applications/Quackers.app"
   },
