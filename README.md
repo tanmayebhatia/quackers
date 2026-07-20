@@ -24,7 +24,11 @@ your cursor is actually on it.
 
 ## Run it
 
+Run from source (macOS, Node 18+):
+
 ```bash
+git clone https://github.com/tanmayebhatia/quackers.git
+cd quackers
 npm install
 npm start
 ```
