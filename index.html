@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Quackers — a little duck that lives on your screen</title>
+<meta name="description" content="Quackers is a tiny pixel duck who lives on your desktop. A tiny experiment in companionship. Bring one home." />
+<meta name="theme-color" content="#f6e2bd" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Quackers — a little duck that lives on your screen" />
+<meta property="og:description" content="A tiny experiment in companionship. Bring one home." />
+<meta property="og:url" content="https://helloquackers.com" />
+<meta property="og:image" content="https://helloquackers.com/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Quackers — a little duck that lives on your screen" />
+<meta name="twitter:description" content="A tiny experiment in companionship. Bring one home. 🐣" />
+<meta name="twitter:image" content="https://helloquackers.com/og.png" />
+<meta name="twitter:site" content="@tanmaye_bhatia" />
+<meta name="twitter:creator" content="@tanmaye_bhatia" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%90%A4%3C/text%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet" />
+
+<style>
+  :root{
+    --ink:#3a2f22;
+    --ink-soft:#8a745a;
+    --beak:#f79e2d;
+    --beak-deep:#e8891a;
+    --line:#e8d5ac;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:"Fraunces",Georgia,serif;
+    color:var(--ink);
+    background:radial-gradient(120% 92% at 50% -8%, #fff7e6 0%, #ffe9c6 34%, #f4cf9c 66%, #e7b482 100%);
+    min-height:100dvh;
+    overflow:hidden;                 /* the whole viewport is the playpen */
+    position:relative;
+    -webkit-font-smoothing:antialiased;
+    user-select:none; -webkit-user-select:none;
+    cursor:default;
+  }
+  body::before{ content:""; position:fixed; inset:0; pointer-events:none; z-index:6;
+    background:radial-gradient(135% 105% at 50% 42%, transparent 56%, rgba(120,78,32,.17) 100%); mix-blend-mode:multiply; }
+  body::after{ content:""; position:fixed; inset:0; pointer-events:none; z-index:7; opacity:.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  /* the duck's world — full viewport, clicks pass through to the page */
+  #world{ position:fixed; top:0; left:0; z-index:3; pointer-events:none;
+    width:100vw; height:100vh; height:100dvh; }
+
+  /* wordmark + tagline, top */
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:5;
+    display:flex; flex-direction:column; align-items:center;
+    padding:clamp(24px,4.5vh,44px) 20px 0;
+    pointer-events:none; text-align:center;
+  }
+  .brand{
+    display:flex; align-items:center; gap:.5rem;
+    font-family:"Pixelify Sans",monospace; font-weight:600;
+    font-size:clamp(1.5rem,4.4vw,2.3rem); letter-spacing:.005em;
+    color:var(--ink);
+    opacity:0; transform:translateY(-8px); animation:rise .7s .1s ease forwards;
+  }
+  .brand .dot{ width:.5em;height:.5em;border-radius:50%; background:var(--beak); box-shadow:0 0 0 4px #f79e2d2e; }
+  .tagline{
+    margin-top:.5rem;
+    font-family:"Fraunces",serif; font-style:italic; font-weight:400;
+    font-size:clamp(.95rem,2.1vw,1.18rem); color:var(--ink-soft);
+    opacity:0; transform:translateY(-6px); animation:rise .8s .28s ease forwards;
+  }
+
+  /* interaction hint (fades once you play) */
+  .hint{
+    position:fixed; top:clamp(112px,17vh,168px); left:0; right:0; z-index:5;
+    text-align:center; pointer-events:none;
+    font-family:"Pixelify Sans",monospace; font-size:.82rem; letter-spacing:.04em;
+    color:var(--ink-soft);
+    opacity:0; animation:rise .9s 1s ease forwards;
+    transition:opacity .5s ease;
+  }
+  .hint.gone{ opacity:0 !important; }
+
+  /* bottom action bar */
+  .dock{
+    position:fixed; left:0; right:0; bottom:0; z-index:5;
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+    padding:0 20px clamp(26px,5vh,44px);
+    pointer-events:none;
+  }
+  .dock > *{ pointer-events:auto; }
+
+  .bring{
+    font-family:"Pixelify Sans",monospace; font-weight:600;
+    font-size:clamp(1.05rem,2.6vw,1.32rem); letter-spacing:.01em;
+    color:#fff; background:linear-gradient(180deg,#ffb04a,var(--beak-deep));
+    border:0; padding:1rem 2.2rem; border-radius:16px; cursor:pointer;
+    box-shadow:0 6px 0 #b96f10, 0 14px 26px rgba(180,110,20,.34);
+    transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;
+    display:inline-flex; align-items:center; gap:.55rem; text-decoration:none;
+    opacity:0; transform:translateY(16px);
+    animation:rise .8s .5s cubic-bezier(.2,.9,.25,1) forwards, bob 2.8s 1.6s ease-in-out infinite;
+  }
+  .bring:hover{ filter:brightness(1.04); box-shadow:0 8px 0 #b96f10,0 18px 30px rgba(180,110,20,.42);}
+  .bring:active{ transform:translateY(4px)!important; box-shadow:0 2px 0 #b96f10,0 8px 14px rgba(180,110,20,.34);}
+  @keyframes bob{ 0%,100%{ translate:0 0; } 50%{ translate:0 -5px; } }
+
+  .links{
+    display:flex; align-items:center; gap:18px;
+    font-family:"Pixelify Sans",monospace; font-size:.85rem;
+    opacity:0; animation:rise .8s .75s ease forwards;
+  }
+  .links a{ color:var(--ink-soft); text-decoration:none; display:inline-flex; align-items:center; gap:.4rem;
+    padding:.35rem .1rem; transition:color .15s ease, transform .15s ease; }
+  .links a:hover{ color:var(--beak-deep); transform:translateY(-1px); }
+  .links svg{ width:1.05em; height:1.05em; }
+  .links .sep{ width:4px;height:4px;border-radius:50%;background:var(--ink-soft);opacity:.4; }
+
+  /* outfit switcher — hidden until he hatches */
+  .outfit{
+    display:none; align-items:center; gap:11px;
+    font-family:"Pixelify Sans",monospace; font-size:.9rem; color:var(--ink);
+    background:rgba(255,253,246,.82); border:2px solid var(--line); border-radius:15px;
+    padding:.35rem .5rem; -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
+    box-shadow:0 6px 16px rgba(150,100,40,.14);
+  }
+  .outfit.show{ display:inline-flex; animation:rise .5s ease; }
+  .outfit .arw{ font-family:"Pixelify Sans",monospace; font-size:1.05rem; line-height:1;
+    background:linear-gradient(180deg,#ffb04a,var(--beak-deep)); color:#fff; border:0;
+    width:1.9rem; height:1.9rem; border-radius:10px; cursor:pointer; padding:0;
+    display:inline-flex; align-items:center; justify-content:center; }
+  .outfit .arw:active{ transform:translateY(1px); }
+  .outfit .nm{ min-width:6rem; text-align:center; letter-spacing:.02em; }
+
+  @keyframes rise{ to{ opacity:1; transform:none; } }
+
+  /* speech bubble — how he shows he's a friend, not a toy */
+  .bubble{
+    position:fixed; z-index:4; pointer-events:none;
+    transform:translate(-50%,-100%) scale(.6); transform-origin:bottom center;
+    background:#fffdf6; color:var(--ink); border:2px solid #e0c9a0;
+    font-family:"Pixelify Sans",monospace; font-size:.92rem; white-space:nowrap;
+    padding:.4rem .7rem; border-radius:12px;
+    box-shadow:0 5px 14px rgba(150,100,40,.18);
+    opacity:0; transition:opacity .18s ease, transform .18s cubic-bezier(.2,1.4,.4,1);
+  }
+  .bubble::after{ content:""; position:absolute; left:50%; bottom:-7px; transform:translateX(-50%);
+    border-left:6px solid transparent; border-right:6px solid transparent; border-top:7px solid #fffdf6; }
+  .bubble::before{ content:""; position:absolute; left:50%; bottom:-10px; transform:translateX(-50%);
+    border-left:7px solid transparent; border-right:7px solid transparent; border-top:8px solid #e0c9a0; }
+  .bubble.show{ opacity:1; transform:translate(-50%,-100%) scale(1); }
+
+  @media (prefers-reduced-motion:reduce){ *{animation-duration:.001s !important;} }
+</style>
+</head>
+<body>
+<canvas id="world"></canvas>
+<div class="bubble" id="bubble"></div>
+
+<header>
+  <div class="brand"><span class="dot"></span>quackers</div>
+  <div class="tagline">a tiny experiment in companionship.</div>
+</header>
+
+<div class="hint" id="hint">tap the egg to hatch him 🥚</div>
+
+<div class="dock">
+  <div class="outfit" id="outfit">
+    <button class="arw" id="prevSkin" aria-label="previous outfit">‹</button>
+    <span class="nm" id="skinName">Classic</span>
+    <button class="arw" id="nextSkin" aria-label="next outfit">›</button>
+  </div>
+  <a class="bring" id="bring" href="https://github.com/tanmayebhatia/quackers" target="_blank" rel="noopener">🐣 Bring me home</a>
+  <div class="links">
+    <a id="gh" href="https://github.com/tanmayebhatia/quackers" target="_blank" rel="noopener">
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
+      source on GitHub
+    </a>
+    <span class="sep"></span>
+    <a id="follow" href="https://x.com/tanmaye_bhatia" target="_blank" rel="noopener">follow the hatching →</a>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   Quackers, alive on the whole page.
+   Duck + egg rendered from the app's exact pixel spec (src/renderer/skins.js).
+   Cold open: an egg you tap to hatch. Then he walks to your clicks, pecks
+   the crumb, faces where he's going, tracks your cursor, quacks when poked.
+   ========================================================================= */
+(() => {
+  const cv = document.getElementById('world');
+  const ctx = cv.getContext('2d');
+  const hintEl = document.getElementById('hint');
+
+  // ---- art + palette straight from the app ----
+  const COL = { C:'#fff4da', O:'#e8d5ac', E:'#33302e', B:'#f79e2d', b:'#d97f14', K:'#ffc9c4', F:'#e8891a' };
+  const BODY = [
+    '.....OCCCCO...','...OCCCCCCCO..','..OCCCCCCCCCO.','..OCCCCCCCCCO.',
+    '.OCCCCCCCCCCO.','.OCCCCCCCCCCO.','.OCCCCCCCCCCO.','.OCCCCCCCCCCO.',
+    '.OCCCCCCCCCCO.','.OCCCCCCCCCCO.','..OCCCCCCCCO..','..OCCCCCCCCO..','...OCCCCCCO...',
+  ];
+  const EYE_L=[[3,4],[4,4],[3,5],[4,5]], EYE_R=[[9,4],[10,4],[9,5],[10,5]];
+  const BEAK=[[5,6],[6,6],[7,6],[8,6]], BEAK2=[[6,7],[7,7]];
+  const CHEEK=[[2,8],[3,8],[10,8],[11,8]], FEETX=[3,4,5,8,9,10];
+  const GW=14, GH=13;
+
+  // the 11 outfits — palette overrides + accessory pixels, straight from
+  // the app (src/renderer/skins.js). accessory layers flattened into `px`.
+  const SKINS = [
+    { name:'Classic', colors:{}, px:[] },
+    { name:'Ninja', colors:{C:'#4d4d59',O:'#37373f',K:'#5a5a66'}, px:[
+      [2,3,'#c0392b'],[3,3,'#c0392b'],[4,3,'#c0392b'],[5,3,'#c0392b'],[6,3,'#c0392b'],[7,3,'#c0392b'],[8,3,'#c0392b'],[9,3,'#c0392b'],[10,3,'#c0392b'],[11,3,'#c0392b'],[12,4,'#a93226'],[13,5,'#a93226'],[12,6,'#a93226'] ] },
+    { name:'Princess', colors:{C:'#ffddee',O:'#e8a8c8',K:'#ff9db3'}, px:[
+      [4,-2,'#f5c542'],[7,-2,'#f5c542'],[10,-2,'#f5c542'],[4,-1,'#f5c542'],[5,-1,'#f5c542'],[6,-1,'#f5c542'],[7,-1,'#f5c542'],[8,-1,'#f5c542'],[9,-1,'#f5c542'],[10,-1,'#f5c542'],[7,-1,'#ff6b81'] ] },
+    { name:'Wizard', colors:{C:'#c3b1e6',O:'#977fc4',K:'#d9a8e8'}, px:[
+      [7,-4,'#5e35b1'],[6,-3,'#5e35b1'],[7,-3,'#5e35b1'],[8,-3,'#5e35b1'],[5,-2,'#5e35b1'],[6,-2,'#5e35b1'],[7,-2,'#5e35b1'],[8,-2,'#5e35b1'],[9,-2,'#5e35b1'],[4,-1,'#5e35b1'],[5,-1,'#5e35b1'],[6,-1,'#5e35b1'],[7,-1,'#5e35b1'],[8,-1,'#5e35b1'],[9,-1,'#5e35b1'],[10,-1,'#5e35b1'],[3,0,'#7e57c2'],[11,0,'#7e57c2'],[7,-3,'#ffd66e'] ] },
+    { name:'Pirate', colors:{}, px:[
+      [5,0,'#8e2f2f'],[6,0,'#8e2f2f'],[7,0,'#8e2f2f'],[8,0,'#8e2f2f'],[9,0,'#8e2f2f'],[10,0,'#8e2f2f'],[3,1,'#8e2f2f'],[4,1,'#8e2f2f'],[5,1,'#8e2f2f'],[6,1,'#8e2f2f'],[7,1,'#8e2f2f'],[8,1,'#8e2f2f'],[9,1,'#8e2f2f'],[10,1,'#8e2f2f'],[11,1,'#a93b3b'],[12,2,'#a93b3b'],[2,3,'#33302e'],[3,3,'#33302e'],[4,3,'#33302e'],[5,3,'#33302e'],[6,3,'#33302e'],[7,3,'#33302e'],[8,3,'#33302e'],[11,3,'#33302e'],[9,3,'#33302e'],[10,3,'#33302e'],[9,4,'#33302e'],[10,4,'#33302e'],[9,5,'#33302e'],[10,5,'#33302e'] ] },
+    { name:'Astronaut', colors:{C:'#f4f6f8',O:'#c2cdd6',K:'#dfe7ee'}, px:[
+      [7,-3,'#e05a4e'],[7,-2,'#9fb3c8'],[7,-1,'#9fb3c8'],[2,2,'#9fb3c8'],[3,2,'#9fb3c8'],[10,2,'#9fb3c8'],[11,2,'#9fb3c8'],[3,9,'#4a7fd4'],[4,9,'#4a7fd4'] ] },
+    { name:'Robot', colors:{C:'#aebdc8',O:'#7f939f',K:'#95a8b5',B:'#f7b32d',b:'#d99a14'}, px:[
+      [7,-3,'#e05a4e'],[7,-2,'#7f939f'],[7,-1,'#7f939f'],[2,6,'#5d6f7a'],[11,6,'#5d6f7a'],[3,10,'#95a8b5'],[10,10,'#95a8b5'] ] },
+    { name:'Cowboy', colors:{}, px:[
+      [5,-2,'#8d6e63'],[6,-2,'#8d6e63'],[7,-2,'#8d6e63'],[8,-2,'#8d6e63'],[9,-2,'#8d6e63'],[5,-1,'#8d6e63'],[6,-1,'#6d4c41'],[7,-1,'#6d4c41'],[8,-1,'#6d4c41'],[9,-1,'#8d6e63'],[2,0,'#795548'],[3,0,'#795548'],[4,0,'#795548'],[5,0,'#795548'],[6,0,'#795548'],[7,0,'#795548'],[8,0,'#795548'],[9,0,'#795548'],[10,0,'#795548'],[11,0,'#795548'],[12,0,'#795548'] ] },
+    { name:'Vampire', colors:{C:'#efe6f5',O:'#c5b2d6',K:'#d9a8c8'}, px:[
+      [6,0,'#2b2333'],[7,0,'#2b2333'],[8,0,'#2b2333'],[7,1,'#2b2333'],[6,8,'#ffffff'],[1,6,'#2b2333'],[2,6,'#2b2333'],[11,6,'#2b2333'],[12,6,'#2b2333'],[1,7,'#443655'],[12,7,'#443655'] ] },
+    { name:'Detective', colors:{}, px:[
+      [4,-1,'#a1887f'],[5,-1,'#a1887f'],[6,-1,'#a1887f'],[7,-1,'#a1887f'],[8,-1,'#a1887f'],[9,-1,'#a1887f'],[10,-1,'#a1887f'],[3,0,'#8d6e63'],[4,0,'#8d6e63'],[5,0,'#8d6e63'],[6,0,'#8d6e63'],[7,0,'#8d6e63'],[8,0,'#8d6e63'],[9,0,'#8d6e63'],[10,0,'#8d6e63'],[11,0,'#8d6e63'],[8,3,'#f5c542'],[11,3,'#f5c542'],[8,6,'#f5c542'],[11,6,'#f5c542'],[9,6,'#f5c542'],[10,6,'#f5c542'],[12,7,'#f5c542'] ] },
+    { name:'Chef', colors:{}, px:[
+      [5,-3,'#ffffff'],[6,-3,'#ffffff'],[7,-3,'#ffffff'],[8,-3,'#ffffff'],[9,-3,'#ffffff'],[4,-2,'#ffffff'],[5,-2,'#ffffff'],[6,-2,'#ffffff'],[7,-2,'#ffffff'],[8,-2,'#ffffff'],[9,-2,'#ffffff'],[10,-2,'#ffffff'],[5,-1,'#ffffff'],[6,-1,'#ffffff'],[7,-1,'#ffffff'],[8,-1,'#ffffff'],[9,-1,'#ffffff'],[5,0,'#e3e3e3'],[6,0,'#e3e3e3'],[7,0,'#e3e3e3'],[8,0,'#e3e3e3'],[9,0,'#e3e3e3'] ] },
+  ];
+  let currentSkin = 0;
+
+  // egg (always classic cream, per the app)
+  const EGG = [
+    '...OOOO...','..OCCCCO..','.OCCCCCCO.','.OCCCCCCO.','OCCCCCCCCO','OCCCCCCCCO',
+    'OCCCCCCCCO','OCCCCCCCCO','OCCCCCCCCO','OCCCCCCCCO','.OCCCCCCO.','.OCCCCCCO.','..OCCCCO..',
+  ];
+  const EGW=10, EGH=13;
+  const SPECK = [[3,4],[6,6],[4,9],[7,10]];              // subtle texture
+  const CRACK = [                                        // revealed per tap
+    [[4,5],[5,6],[5,5]],
+    [[2,6],[3,5],[6,5],[7,6]],
+    [[1,6],[4,6],[6,6],[8,6],[5,7],[4,4],[6,4]],
+  ];
+
+  let PXS=12, dpr=1, W=0, H=0;
+  function fit(){
+    dpr = Math.min(window.devicePixelRatio||1, 3);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W*dpr; cv.height = H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.imageSmoothingEnabled = false;
+    PXS = Math.max(8, Math.min(13, Math.round(Math.min(W,H)/56)));
+  }
+
+  // ---- state ----
+  let phase = 'egg';                 // 'egg' → 'live'
+  let crackStage = 0, shake = 0, hatchPop = 0;
+  const duck = { x:0, y:0, tx:0, ty:0, face:1, walking:false };
+  let mouse = { x:0, y:0, active:false };
+  let look = { x:0, y:0 };
+  let blink=0, nextBlink=80, t=0, hop=0, peck=0, pecking=false;
+  const crumbs = [];                 // {x,y,s}
+  const puffs = [];                  // hearts / sparkles
+  const shells = [];                 // eggshell fragments after hatch
+  let idleTimer = 0, hintHidden=false, lastActive=0, napping=false, belly=0;
+
+  // little things he says — personality, not copy
+  const bubbleEl = document.getElementById('bubble');
+  let bubbleUntil = 0;
+  const LINE = {
+    hatch:['hi!! 🐣','you hatched me!','oh — hello!','*peep!*'],
+    eat:['yum','mmm','more?','tasty!','nom nom'],
+    poke:['quack!','hehe','again!','boop','hi :)'],
+    wake:['oh! you’re back','mmh… hi','missed you','*yawn*'],
+    outfit:['how do i look?','ooh','fancy!','do i look cool?'],
+    idle:['psst','hi :)','…hi?','feed me?'],
+  };
+  const pick = (a)=>a[Math.floor(Math.random()*a.length)];
+  function say(text, dur=1700){ bubbleEl.textContent=text; bubbleEl.classList.add('show'); bubbleUntil=t+Math.round(dur/16.7); }
+
+  function reset(){ duck.x=W*0.5; duck.y=H*0.6; duck.tx=duck.x; duck.ty=duck.y; }
+  const clampY = (y)=>Math.max(H*0.2, Math.min(H*0.84, y));
+
+  function stir(){ lastActive=t; if(napping){ napping=false; hop=Math.max(hop,0.5); say(pick(LINE.wake),1600); } }
+  window.addEventListener('pointermove', (e)=>{ mouse.x=e.clientX; mouse.y=e.clientY; mouse.active=true; stir(); }, {passive:true});
+
+  function setHint(txt){ hintEl.textContent = txt; hintEl.classList.remove('gone'); hintHidden=false; }
+  function hideHint(){ if(hintHidden) return; hintHidden=true; hintEl.classList.add('gone'); }
+
+  function duckBox(){ const w=GW*PXS,h=GH*PXS; return { l:duck.x-w/2, r:duck.x+w/2, t:duck.y-h, b:duck.y+6 }; }
+
+  // ---- input ----
+  window.addEventListener('pointerdown', (e)=>{
+    if (e.target.closest('.dock, header, a, button, input, form')) return;
+    stir();
+
+    if (phase==='egg'){
+      crackStage++; shake=1; crackSound();
+      if (crackStage>=3) hatch();
+      else setHint(crackStage===1 ? 'keep tapping — he’s coming!' : 'almost there…');
+      return;
+    }
+
+    const b = duckBox();
+    if (e.clientX>=b.l-8 && e.clientX<=b.r+8 && e.clientY>=b.t-8 && e.clientY<=b.b+8) petDuck();
+    else dropCrumb(e.clientX, e.clientY);
+  });
+
+  function hatch(){
+    phase='live'; hatchPop=1; hop=1; lastActive=t; quack();
+    document.getElementById('outfit').classList.add('show');
+    // eggshell fragments burst outward
+    for(let i=0;i<10;i++){ const a=(i/10)*Math.PI*2;
+      shells.push({ x:duck.x+Math.cos(a)*6, y:duck.y-GH*PXS*0.5+Math.sin(a)*6,
+        vx:Math.cos(a)*(2+ (i%3)), vy:Math.sin(a)*(2+(i%3))-2, life:60, max:60, s:PXS*(0.5+(i%2)*0.35) }); }
+    for(let i=0;i<5;i++) puffs.push({ x:duck.x+(i-2)*10, y:duck.y-GH*PXS*0.7, vx:(i-2)*0.5, vy:-1.4, life:56, max:56, ch:['❤','🧡','⭐','✦','🌾'][i%5], size:15+(i%3)*5 });
+    setHint('click anywhere — he’ll come running  ·  poke him for a quack');
+    setTimeout(hideHint, 4200);
+    say(pick(LINE.hatch), 2200);
+  }
+
+  function dropCrumb(x,y){ crumbs.push({x, y:clampY(y), s:0}); duck.ty=clampY(y); hideHint(); }
+  function nearestCrumb(){ let best=null,bd=1e9; for(const c of crumbs){ const d=Math.hypot(c.x-duck.x,c.y-duck.y); if(d<bd){bd=d;best=c;} } return best; }
+
+  function petDuck(){ hop=1; pecking=false; quack();
+    for(let i=0;i<5;i++) puffs.push({ x:duck.x+(i-2)*10, y:duck.y-GH*PXS*0.7, vx:(i-2)*0.5, vy:-1.3-Math.abs(i-2)*0.2, life:56, max:56, ch:['❤','🧡','⭐','✦','🌾'][i%5], size:14+(i%3)*5 });
+    say(pick(LINE.poke), 1300); hideHint();
+  }
+
+  // ---- drawing helpers ----
+  function put(c,r,color,ox,oy,px){ px=px||PXS; ctx.fillStyle=color; ctx.fillRect(Math.round(ox+c*px),Math.round(oy+r*px),px+0.6,px+0.6); }
+  const easeOutBack = (x)=>{ const c1=1.70158, c3=c1+1; return 1 + c3*Math.pow(x-1,3) + c1*Math.pow(x-1,2); };
+
+  function drawEgg(){
+    const w=EGW*PXS, h=EGH*PXS;
+    const rock = Math.sin(t/26)*1.5;
+    const sx = Math.sin(t*1.6)*shake*7 + rock;
+    const oy = duck.y - h + Math.sin(t/34)*1.2;
+    const ox = duck.x - w/2 + sx;
+    for(let r=0;r<EGH;r++) for(let c=0;c<EGW;c++){ const ch=EGG[r][c]; if(ch!=='.'&&COL[ch]) put(c,r,COL[ch],ox,oy); }
+    for(const [c,r] of SPECK) put(c,r,'#efe0b8',ox,oy);
+    for(let s=0;s<crackStage;s++) for(const [c,r] of CRACK[s]) put(c,r,'#9c7f52',ox,oy);
+  }
+
+  function drawDuck(){
+    const pal = Object.assign({}, COL, SKINS[currentSkin].colors);
+    const w=GW*PXS, h=GH*PXS;
+    const breathe=Math.sin(t/34)*1.6;
+    const walkBob=duck.walking?Math.abs(Math.sin(t/5))*4:0;
+    const peckDip=pecking?Math.sin(peck)*9:0;
+    const napDip=napping?3:0;
+    const oy=duck.y - h + breathe - walkBob - hop*46 + peckDip + napDip;
+    const ox=duck.x - w/2;
+
+    ctx.save();
+    if(hatchPop>0){ const s=Math.max(0.2,easeOutBack(1-hatchPop)); ctx.translate(duck.x,duck.y); ctx.scale(s,s); ctx.translate(-duck.x,-duck.y); }
+    if(duck.face<0){ ctx.translate(duck.x,0); ctx.scale(-1,1); ctx.translate(-duck.x,0); }
+
+    for(let r=0;r<GH;r++) for(let c=0;c<GW;c++){ const ch=BODY[r][c]; if(ch!=='.'&&pal[ch]) put(c,r,pal[ch],ox,oy); }
+    for(const [c,r] of CHEEK) put(c,r,pal.K,ox,oy);
+    for(const [c,r] of BEAK) put(c,r,pal.B,ox,oy);
+    for(const [c,r] of BEAK2) put(c,r,pal.b,ox,oy+(pecking?4:0));
+
+    const step=duck.walking?(Math.sin(t/5)>0?1:-1):0;
+    for(const c of FEETX){ const lift=(duck.walking && ((c<7)===(step>0)))?-3:0; put(c,13,pal.F,ox,oy+lift); }
+
+    const eyesShut = napping || (blink>0 && blink<1.4);
+    let lx=look.x, ly=look.y; if(duck.face<0) lx=-lx;
+    const pdx=Math.round(lx*1.1), pdy=Math.round(ly*1.0);
+    for(const eye of [EYE_L,EYE_R]){
+      if(eyesShut){ const [bx,by]=eye[2]; put(bx,by,pal.E,ox,oy); put(bx+1,by,pal.E,ox,oy); }
+      else for(const [c,r] of eye) put(c+pdx,r+pdy,pal.E,ox,oy);
+    }
+    // outfit — accessory pixels ride on top (hats, masks, capes)
+    for(const [c,r,color] of SKINS[currentSkin].px) put(c,r,color,ox,oy);
+    ctx.restore();
+  }
+
+  // ---- main loop ----
+  function tick(){
+    t++;
+    ctx.clearRect(0,0,W,H);
+    shake*=0.85; if(shake<0.02) shake=0;
+
+    // crumbs — chunky, obvious
+    for(const c of crumbs) c.s=Math.min(15, c.s+0.9);
+    for(const c of crumbs){
+      const s=c.s;
+      ctx.fillStyle='rgba(150,100,50,.24)'; ctx.fillRect(c.x-s*0.55, c.y+s*0.45, s*1.1, 3);   // ground shadow
+      ctx.fillStyle='#a9743a'; ctx.fillRect(c.x-s/2, c.y-s/2, s, s);                            // crumb body
+      ctx.fillStyle='#c99a5a'; ctx.fillRect(c.x-s/2, c.y-s/2, s*0.42, s*0.42);                  // highlight
+      ctx.fillStyle='#7f5424'; ctx.fillRect(c.x+s*0.08, c.y+s*0.08, s*0.34, s*0.34);            // shade
+    }
+
+    if (phase==='egg'){
+      drawEgg();
+    } else {
+      // drowses off after a while untouched — the "he's just there" bit
+      napping = (t-lastActive) > 780 && crumbs.length===0 && !pecking && Math.abs(duck.tx-duck.x)<4 && hatchPop===0;
+
+      if(!napping){
+        // choose target
+        const target=nearestCrumb();
+        if(target){ duck.tx=target.x; duck.ty=target.y; idleTimer=0; }
+        else { idleTimer++; if(idleTimer>260 && (t%200===0)){ duck.tx=W*0.5+Math.sin(t)*0.28*W; } }
+
+        // move toward target (both axes)
+        const dx=duck.tx-duck.x, dy=duck.ty-duck.y;
+        duck.walking = Math.hypot(dx,dy)>4 && !pecking;
+        if(duck.walking){
+          if(Math.abs(dx)>1) duck.face = dx>0?1:-1;
+          duck.x += Math.max(-2.6,Math.min(2.6, dx*0.12));
+          duck.y += Math.max(-2.0,Math.min(2.0, dy*0.12));
+        }
+
+        // reached crumb → peck it
+        if(target && Math.hypot(target.x-duck.x,target.y-duck.y)<PXS*1.5 && !pecking){ pecking=true; peck=0; }
+        if(pecking){
+          peck+=0.5;
+          if(peck>Math.PI){ pecking=false;
+            const idx=crumbs.indexOf(target); if(idx>=0) crumbs.splice(idx,1);
+            chirp(); belly++;
+            if(Math.random()<0.55) say(pick(LINE.eat),1300);
+            for(let i=0;i<3;i++) puffs.push({ x:duck.x+(i-1)*8, y:duck.y-GH*PXS*0.5, vx:(i-1)*0.4, vy:-1.1, life:44, max:44, ch:['✦','✧','🌾'][i%3], size:13+(i%2)*4, color:'#caa14e' });
+          }
+        }
+
+        // eyes ease toward cursor
+        if(mouse.active){ const ex=duck.x, ey=duck.y-GH*PXS*0.6;
+          const tx=Math.max(-1,Math.min(1,(mouse.x-ex)/220)), ty=Math.max(-1,Math.min(1,(mouse.y-ey)/180));
+          look.x+=(tx-look.x)*0.12; look.y+=(ty-look.y)*0.12;
+        }
+
+        // once in a while, an unprompted peep
+        if(!duck.walking && crumbs.length===0 && t>bubbleUntil+120 && Math.random()<0.0022) say(pick(LINE.idle),1500);
+      } else {
+        duck.walking=false;
+        if(t%48===0) puffs.push({ x:duck.x+GW*PXS*0.30, y:duck.y-GH*PXS*0.95, vx:0.25, vy:-0.5, life:96, max:96, ch:'z', size:12+((t/48)%3)*4, color:'#a9906a' });
+      }
+
+      // blink + hop + pop decay (always)
+      if(--nextBlink<=0){ blink=1; nextBlink=100+Math.floor(Math.abs(Math.sin(t))*140)+50; }
+      if(blink>0){ blink+=0.34; if(blink>2) blink=0; }
+      hop*=0.86; if(hop<0.02) hop=0;
+      hatchPop*=0.9; if(hatchPop<0.02) hatchPop=0;
+
+      drawDuck();
+    }
+
+    // eggshell fragments
+    for(let i=shells.length-1;i>=0;i--){ const p=shells[i];
+      p.life--; p.x+=p.vx; p.y+=p.vy; p.vy+=0.18;
+      if(p.life<=0){ shells.splice(i,1); continue; }
+      ctx.globalAlpha=Math.max(0,p.life/p.max); ctx.fillStyle='#fff4da';
+      ctx.fillRect(p.x,p.y,p.s,p.s);
+      ctx.fillStyle='#e8d5ac'; ctx.fillRect(p.x,p.y,p.s,Math.max(1,p.s*0.3)); ctx.globalAlpha=1;
+    }
+    // hearts / sparkles
+    for(let i=puffs.length-1;i>=0;i--){ const p=puffs[i];
+      p.life--; p.x+=p.vx; p.y+=p.vy; p.vy+=0.02;
+      if(p.life<=0){ puffs.splice(i,1); continue; }
+      ctx.globalAlpha=Math.max(0,p.life/p.max);
+      ctx.fillStyle=p.color||'#b98a4a';
+      ctx.font=(p.ch==='z'?'italic ':'')+p.size+'px serif';
+      ctx.fillText(p.ch,p.x,p.y); ctx.globalAlpha=1;
+    }
+
+    // speech bubble follows his head while it's up
+    if(bubbleEl.classList.contains('show')){
+      if(t>=bubbleUntil) bubbleEl.classList.remove('show');
+      else { bubbleEl.style.left=Math.round(duck.x)+'px'; bubbleEl.style.top=Math.round(duck.y - GH*PXS - 10)+'px'; }
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // ---- sound (WebAudio, no assets) ----
+  let ac=null;
+  function ensure(){ ac = ac || new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==='suspended') ac.resume(); return ac; }
+  function quack(){ try{ const a=ensure(), now=a.currentTime;
+    const o=a.createOscillator(), g=a.createGain(), f=a.createBiquadFilter();
+    o.type='sawtooth'; o.frequency.setValueAtTime(360,now); o.frequency.exponentialRampToValueAtTime(175,now+0.16); o.frequency.exponentialRampToValueAtTime(300,now+0.22);
+    f.type='bandpass'; f.frequency.value=900; f.Q.value=6;
+    g.gain.setValueAtTime(0.0001,now); g.gain.exponentialRampToValueAtTime(0.5,now+0.02); g.gain.exponentialRampToValueAtTime(0.0001,now+0.24);
+    o.connect(f); f.connect(g); g.connect(a.destination); o.start(now); o.stop(now+0.26);
+  }catch(e){} }
+  function chirp(){ try{ const a=ensure(), now=a.currentTime;
+    const o=a.createOscillator(), g=a.createGain();
+    o.type='triangle'; o.frequency.setValueAtTime(660,now); o.frequency.exponentialRampToValueAtTime(1040,now+0.09);
+    g.gain.setValueAtTime(0.0001,now); g.gain.exponentialRampToValueAtTime(0.22,now+0.015); g.gain.exponentialRampToValueAtTime(0.0001,now+0.16);
+    o.connect(g); g.connect(a.destination); o.start(now); o.stop(now+0.17);
+  }catch(e){} }
+  function crackSound(){ try{ const a=ensure(), now=a.currentTime;
+    const o=a.createOscillator(), g=a.createGain();
+    o.type='square'; o.frequency.setValueAtTime(220,now); o.frequency.exponentialRampToValueAtTime(90,now+0.08);
+    g.gain.setValueAtTime(0.0001,now); g.gain.exponentialRampToValueAtTime(0.3,now+0.008); g.gain.exponentialRampToValueAtTime(0.0001,now+0.12);
+    o.connect(g); g.connect(a.destination); o.start(now); o.stop(now+0.13);
+  }catch(e){} }
+
+  // ---- outfit switcher ----
+  const skinNameEl = document.getElementById('skinName');
+  function changeSkin(dir){
+    currentSkin = (currentSkin + dir + SKINS.length) % SKINS.length;
+    skinNameEl.textContent = SKINS[currentSkin].name;
+    stir(); hop=Math.max(hop,0.55); chirp(); say(pick(LINE.outfit),1500);
+    for(let i=0;i<7;i++){ const a=(i/7)*Math.PI*2;
+      puffs.push({ x:duck.x+Math.cos(a)*18, y:duck.y-GH*PXS*0.5+Math.sin(a)*14, vx:Math.cos(a)*0.9, vy:Math.sin(a)*0.6-0.8, life:38, max:38, ch:'✦', size:12, color:'#f5c542' }); }
+  }
+  document.getElementById('prevSkin').addEventListener('click', ()=>changeSkin(-1));
+  document.getElementById('nextSkin').addEventListener('click', ()=>changeSkin(1));
+
+  fit(); reset();
+  window.addEventListener('resize', ()=>{ const rx=duck.x/W, ry=duck.y/H; fit(); duck.x=rx*W; duck.y=ry*H; duck.tx=duck.x; duck.ty=duck.y; });
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
