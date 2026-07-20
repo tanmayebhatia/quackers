@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>What Quackers remembers</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      padding: 20px 24px 40px;
+      font: 14px/1.5 -apple-system, sans-serif;
+      background: #fdf8ec;
+      color: #4a4437;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #26221a; color: #efe8d8; }
+      .item { background: #322d22 !important; }
+      .meta { color: #a89f8c !important; }
+    }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .sub { margin: 0 0 20px; font-size: 12.5px; opacity: 0.7; }
+    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; margin: 22px 0 8px; }
+    .item {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      background: #fff4da;
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+    }
+    .item span { flex: 1; }
+    .meta { font-size: 11.5px; color: #97906f; white-space: nowrap; }
+    button {
+      border: none;
+      background: transparent;
+      color: #c96a5a;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 0 2px;
+    }
+    button:hover { text-decoration: underline; }
+    button.edit { color: #8a7f5c; }
+    .empty { opacity: 0.55; font-style: italic; padding: 4px 2px; }
+    .stagebar { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
+    .stage { font-size: 15px; font-weight: 600; }
+    .depth { font-size: 11.5px; opacity: 0.6; }
+    .prose { background: #fff4da; border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; }
+    .prose p { margin: 0 0 8px; }
+    .prose p:last-child { margin: 0; }
+    .prose .us { opacity: 0.85; }
+    .prose .note { font-size: 11.5px; opacity: 0.55; font-style: italic; }
+    .prose.faded { opacity: 0.85; }
+    .edit-input {
+      flex: 1;
+      font: 14px/1.5 -apple-system, sans-serif;
+      border: 1px solid #d8c89a;
+      border-radius: 6px;
+      padding: 2px 6px;
+      background: #fff;
+      color: inherit;
+    }
+    @media (prefers-color-scheme: dark) {
+      .prose { background: #322d22; }
+      .edit-input { background: #26221a; border-color: #57503d; }
+    }
+  </style>
+</head>
+<body>
+  <h1>🥚 What Quackers remembers</h1>
+  <p class="sub">Everything lives in a local file on this Mac. Delete anything — Quackers won't mind.</p>
+  <div id="content"></div>
+  <script src="memory.js"></script>
+</body>
+</html>

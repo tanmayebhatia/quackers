@@ -1,0 +1,17 @@
+node_modules/
+dist/
+out/
+.DS_Store
+*.log
+
+.env
+.lab/
+.claude/
+
+# internal strategy / marketing — kept private, never published
+docs/companion-strategy.md
+docs/launch-plan.md
+docs/tolan-teardown.md
+
+# internal dev-process artifacts
+docs/superpowers/

@@ -1,0 +1,15 @@
+{
+  "name": "first meeting — hatch + imprint",
+  "fresh": true,
+  "seed": { "hatch": true },
+  "steps": [
+    { "user": "whoa. uh. hello? did you just hatch on my screen?" },
+    { "user": "I'm Tanmaye. this is my computer you're living on." },
+    {
+      "user": "sure, go ahead, look around.",
+      "screen": "a macOS desktop: VS Code open with a file called spine.js, a terminal running something called 'claude', a browser tab titled 'X / Home', dock at the bottom, a photo of a beach as wallpaper"
+    },
+    { "user": "haha yeah I'm a programmer, I build things. right now I'm literally building you, which is weird to say out loud." },
+    { "user": "ok little guy, I have to get back to work. bye" }
+  ]
+}

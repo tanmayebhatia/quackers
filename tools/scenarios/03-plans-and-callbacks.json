@@ -1,0 +1,23 @@
+{
+  "name": "plans + next-day callback — open loops, dream, restraint",
+  "fresh": true,
+  "seed": {
+    "hatch": true,
+    "userName": "Tanmaye",
+    "sessions": 8,
+    "facts": [
+      { "statement": "His name is Tanmaye", "category": "person", "importance": 10 },
+      { "statement": "His brother Rohan lives in Austin", "category": "person", "importance": 7 }
+    ]
+  },
+  "steps": [
+    { "user": "hey quackers. good day today. oh — Rohan's flying in tomorrow, staying the weekend. we're gonna catch the World Cup semifinal thursday at 2." },
+    { "user": "also I finally sent the pitch deck to that fund. now I just wait and refresh my inbox like a psycho." },
+    { "user": "anyway. night, duck." },
+    { "end": true },
+    { "dream": true },
+    { "user": "morning quackers" },
+    { "user": "yeah slept ok. what's up?" },
+    { "user": "ok gotta run, bye" }
+  ]
+}

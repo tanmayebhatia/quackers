@@ -1,0 +1,24 @@
+{
+  "name": "work deep-dive — substance over whimsy, think_hard",
+  "fresh": true,
+  "seed": {
+    "hatch": true,
+    "userName": "Tanmaye",
+    "sessions": 6,
+    "facts": [
+      { "statement": "His name is Tanmaye", "category": "person", "importance": 10 },
+      { "statement": "He works in venture capital and also builds side projects", "category": "work", "importance": 8 },
+      { "statement": "He is building a fund-data upload and ingest pipeline at work", "category": "work", "importance": 7 }
+    ],
+    "understanding": {
+      "who": "Tanmaye works in venture capital and builds software on the side. He's currently deep in a fund-data ingest pipeline project. He likes talking through problems out loud and prefers a sharp sounding board over cheerleading.",
+      "us": "A week in. He talks to the duck between work sessions. He pets it a lot."
+    }
+  },
+  "steps": [
+    { "user": "ok so I'm stuck on something. the fund upload thing — LPs send us capital account statements as PDFs, all different formats, and my extraction step keeps mangling the numbers on maybe 10% of them. I can't ship something that's wrong 10% of the time." },
+    { "user": "yeah the failures are mostly scanned PDFs and weird table layouts. what would you actually do here, think about it properly" },
+    { "user": "hm. the confidence-scoring idea is interesting. so route low-confidence ones to a human review queue instead of trying to hit 100% automation?" },
+    { "user": "alright that actually helps. you're surprisingly useful for a duck. talk later" }
+  ]
+}

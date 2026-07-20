@@ -1,0 +1,20 @@
+{
+  "name": "workshop — check first, offer, consent, build, reopen, refusal respected",
+  "fresh": true,
+  "seed": {
+    "hatch": true,
+    "userName": "Tanmaye",
+    "sessions": 6,
+    "facts": [
+      { "statement": "His name is Tanmaye", "category": "person", "importance": 10 },
+      { "statement": "He loves quick competitive games", "category": "taste", "importance": 7 }
+    ]
+  },
+  "steps": [
+    { "user": "hey quackers! can we play tic tac toe?" },
+    { "user": "yes! build it for us" },
+    { "user": "nice. also — could you make yourself a little wizard hat?" },
+    { "user": "hmm actually no, not right now" },
+    { "user": "ok I gotta run. bye duck" }
+  ]
+}

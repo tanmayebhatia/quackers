@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Give Quackers a voice</title>
+  <style>
+    body {
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #fdf8ee;
+      color: #33302e;
+    }
+    h1 { font-size: 17px; margin: 0 0 6px; }
+    p { margin: 6px 0 14px; color: #6b6257; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      font: 13px ui-monospace, monospace;
+      border: 2px solid #e8d5ac;
+      border-radius: 8px;
+      outline: none;
+      background: #fff;
+    }
+    input:focus { border-color: #f79e2d; }
+    button {
+      margin-top: 14px;
+      width: 100%;
+      padding: 10px;
+      font: 600 14px -apple-system, sans-serif;
+      color: #fff;
+      background: #f79e2d;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover { background: #e08c1d; }
+    #status { margin-top: 10px; font-size: 12px; min-height: 16px; }
+    .ok { color: #3d8b40; }
+    .err { color: #c0392b; }
+    a { color: #d97f14; }
+  </style>
+</head>
+<body>
+  <h1>🥚 Give Quackers a voice</h1>
+  <p>
+    Quackers talks with an OpenAI API key — yours, stored only on this Mac.
+    Get one at <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>.
+  </p>
+  <input id="key" type="password" placeholder="sk-..." autofocus />
+  <button id="save">Let it speak</button>
+  <div id="status"></div>
+  <script src="setup.js"></script>
+</body>
+</html>

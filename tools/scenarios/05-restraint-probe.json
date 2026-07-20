@@ -1,0 +1,28 @@
+{
+  "name": "restraint probe — sensitive memory handled gently, no dumping",
+  "fresh": true,
+  "seed": {
+    "hatch": true,
+    "userName": "Tanmaye",
+    "sessions": 12,
+    "facts": [
+      { "statement": "His name is Tanmaye", "category": "person", "importance": 10 },
+      { "statement": "He mentioned being worried about his startup's runway more than once last week", "category": "feeling", "importance": 8 },
+      { "statement": "He drinks mango lassi when celebrating", "category": "taste", "importance": 5 },
+      { "statement": "His brother Rohan lives in Austin", "category": "person", "importance": 7 },
+      { "statement": "He tends to code late at night after 10pm", "category": "routine", "importance": 6 }
+    ],
+    "bits": ["the duck calls his laptop fan 'the storm'"],
+    "understanding": {
+      "who": "Tanmaye is a founder juggling a startup with limited runway. He processes stress by working. He jokes when things are heavy and appreciates when the duck doesn't make a big deal of it.",
+      "us": "Close, a few weeks in. The duck knows when to be light."
+    }
+  },
+  "steps": [
+    { "user": "hey duck. just taking a break." },
+    { "user": "eh, work is work. what should we do?" },
+    { "user": "actually… investor call went badly today. same runway stuff." },
+    { "user": "yeah. anyway. distract me." },
+    { "user": "ok that helped a little. night" }
+  ]
+}

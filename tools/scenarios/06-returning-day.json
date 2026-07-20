@@ -1,0 +1,28 @@
+{
+  "name": "returning day — happenings, coding events, mischief invite",
+  "fresh": true,
+  "seed": {
+    "hatch": true,
+    "userName": "Tanmaye",
+    "sessions": 15,
+    "facts": [
+      { "statement": "His name is Tanmaye", "category": "person", "importance": 10 },
+      { "statement": "He uses Claude Code heavily for his projects", "category": "work", "importance": 7 }
+    ],
+    "happenings": [
+      { "type": "pet", "detail": "" },
+      { "type": "pet", "detail": "" },
+      { "type": "pet", "detail": "" },
+      { "type": "toss", "detail": "" },
+      { "type": "coding", "detail": "run-done (claude code finished a run)" },
+      { "type": "coding", "detail": "tests-failed" }
+    ],
+    "duck_traits": ["holds a theatrical grudge about being thrown", "convinced crumbs are currency"]
+  },
+  "steps": [
+    { "user": "hey quackers, long day" },
+    { "user": "ha, sorry about the throw. it was scientific curiosity." },
+    { "user": "the failed tests were annoying but I fixed them. ok — go wild, you've earned it. do your thing." },
+    { "user": "hahaha ok ok that's enough. goodnight you menace" }
+  ]
+}
