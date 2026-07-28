@@ -8,6 +8,7 @@ const spine = require('./spine');
 const dreamer = require('./dream');
 const senses = require('./senses');
 const brain = require('./brain');
+const chat = require('./chat');
 const tricks = require('./tricks');
 const workshop = require('./workshop');
 
@@ -47,6 +48,15 @@ function toggleTalk() {
     win.webContents.send('quackers:arrive');
   }
   win.webContents.send('quackers:talk-toggle');
+}
+
+function requestChat() {
+  if (!win) return;
+  if (!win.isVisible()) {
+    win.showInactive();
+    win.webContents.send('quackers:arrive');
+  }
+  win.webContents.send('quackers:chat-request');
 }
 
 function createWindow() {
@@ -123,6 +133,7 @@ function buildTrayMenu() {
     { type: 'separator' },
     { label: 'Show / Hide', accelerator: TOGGLE_ACCELERATOR, click: toggleDuck },
     { label: 'Talk / Hush', accelerator: TALK_ACCELERATOR, click: toggleTalk },
+    { label: 'Chat (type instead)…', click: requestChat },
     { label: 'Clip that! (last 15s)', accelerator: CLIP_ACCELERATOR, click: requestClip },
     { label: 'What Quackers remembers…', click: openMemoryWindow },
     { label: 'Fix screen vision…', click: openScreenSettings },
@@ -515,7 +526,65 @@ function loadApiKey() {
 }
 
 
-ipcMain.handle('realtime-connect', async (_event, offerSdp) => {
+// The session config the mint is bound to. Rebuilt per mint so a pre-warmed
+// secret still snapshots current memory/ambient state (within its short life).
+function buildRealtimeSessionConfig() {
+  return {
+    type: 'realtime',
+    model: REALTIME_MODEL,
+    instructions: brain.buildInstructions({ spine, ambientLine: senses.ambientLine() }),
+    audio: {
+      input: {
+        // 'medium' (was 'low') tightens end-of-turn latency — the model commits
+        // to replying sooner after he stops. Barge-in is handled client-side
+        // (voice.js triggers response.cancel the instant he talks over the duck),
+        // so we don't also set interrupt_response here — the mic is muted to the
+        // server during playback and the local double-talk detector is authoritative.
+        turn_detection: { type: 'semantic_vad', eagerness: 'medium' },
+        transcription: { model: 'gpt-4o-mini-transcribe' },
+      },
+      output: { voice: VOICE },
+    },
+    tools: brain.REALTIME_TOOLS,
+    tool_choice: 'auto',
+  };
+}
+
+// Mint an ephemeral client secret. Minting alone starts no call and bills no
+// audio — that only begins at the /realtime/calls SDP exchange — so this is safe
+// to pre-run on intent (see realtime-prewarm) to keep it off the tap-to-talk path.
+async function mintRealtimeSecret(key) {
+  const mint = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session: buildRealtimeSessionConfig() }),
+  });
+  if (!mint.ok) {
+    const body = (await mint.text()).slice(0, 300);
+    return { error: `session mint failed (${mint.status}): ${body}` };
+  }
+  const secret = await mint.json();
+  return { value: secret.value };
+}
+
+// Pre-warm: hand the renderer a minted secret it can cache for a tap that's
+// seconds away. No mic prompt here — that stays on the intentional connect path.
+ipcMain.handle('realtime-prewarm', async () => {
+  const key = loadApiKey();
+  if (!key) return { error: 'no-voice' };
+  try {
+    return await mintRealtimeSecret(key);
+  } catch (err) {
+    return { error: `network error: ${err.message}` };
+  }
+});
+
+// arg is { offerSdp, secret? }. A pre-warmed secret skips the mint round trip;
+// a bare string is still accepted for safety. Legacy callers passed the SDP
+// string directly.
+ipcMain.handle('realtime-connect', async (_event, arg) => {
+  const offerSdp = typeof arg === 'string' ? arg : arg && arg.offerSdp;
+  const preSecret = typeof arg === 'object' && arg ? arg.secret : null;
   const key = loadApiKey();
   if (!key) {
     return { error: 'no-voice' };
@@ -531,38 +600,19 @@ ipcMain.handle('realtime-connect', async (_event, offerSdp) => {
     }
   }
 
-  const sessionConfig = {
-    type: 'realtime',
-    model: REALTIME_MODEL,
-    instructions: brain.buildInstructions({ spine, ambientLine: senses.ambientLine() }),
-    audio: {
-      input: {
-        turn_detection: { type: 'semantic_vad', eagerness: 'low' },
-        transcription: { model: 'gpt-4o-mini-transcribe' },
-      },
-      output: { voice: VOICE },
-    },
-    tools: brain.REALTIME_TOOLS,
-    tool_choice: 'auto',
-  };
-
   try {
-    const mint = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session: sessionConfig }),
-    });
-    if (!mint.ok) {
-      const body = (await mint.text()).slice(0, 300);
-      return { error: `session mint failed (${mint.status}): ${body}` };
+    let secretValue = preSecret;
+    if (!secretValue) {
+      const minted = await mintRealtimeSecret(key);
+      if (minted.error) return { error: minted.error };
+      secretValue = minted.value;
     }
-    const secret = await mint.json();
 
     let sdpRes = await fetch(
       `https://api.openai.com/v1/realtime/calls?model=${REALTIME_MODEL}`,
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${secret.value}`, 'Content-Type': 'application/sdp' },
+        headers: { Authorization: `Bearer ${secretValue}`, 'Content-Type': 'application/sdp' },
         body: offerSdp,
       }
     );
@@ -573,7 +623,7 @@ ipcMain.handle('realtime-connect', async (_event, offerSdp) => {
       await new Promise((r) => setTimeout(r, 1500));
       sdpRes = await fetch(`https://api.openai.com/v1/realtime/calls?model=${REALTIME_MODEL}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${secret.value}`, 'Content-Type': 'application/sdp' },
+        headers: { Authorization: `Bearer ${secretValue}`, 'Content-Type': 'application/sdp' },
         body: offerSdp,
       });
     }
@@ -949,6 +999,188 @@ ipcMain.handle('think-hard', async (_event, { question, recent }) => {
   const res = await brain.runThinkHard({ spine, apiKey: loadApiKey(), question, recent, log: logEvent });
   return { answer: res.answer, framed: brain.frameThinkHard(res.answer) };
 });
+
+// ---------------------------------------------------------------------------
+// Text-chat mode — a typed conversation with the SAME duck. The API key stays
+// here (exactly like the realtime broker); the renderer only ever sees streamed
+// text and tool effects. On close the transcript flows through the SAME digest
+// as a voice conversation, so talking and texting are one continuous memory.
+// ---------------------------------------------------------------------------
+
+let chatMessages = null; // running chat/completions message array; null when closed
+let chatTranscript = []; // {role:'duck'|'user', text} for the digest, mirroring voice
+let chatBusy = false; // a model turn/tool loop is in flight
+
+function chatSend(type, payload) {
+  if (win && !win.isDestroyed()) win.webContents.send(type, payload);
+}
+
+function toApiToolCall(tc) {
+  return { id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.stringify(tc.args || {}) } };
+}
+
+// Run model turns until one settles with no tool calls (capped so a tool loop
+// can never spin). Streams visible text to the panel; runs tools here in main.
+async function runChatLoop() {
+  if (chatBusy || !chatMessages) return;
+  chatBusy = true;
+  let closeAfter = false;
+  let switchVoiceAfter = false;
+  try {
+    const apiKey = loadApiKey();
+    if (!apiKey) return;
+    for (let hop = 0; hop < 6; hop++) {
+      chatSend('quackers:chat-typing', true);
+      const { text, toolCalls } = await chat.runChatTurn({
+        apiKey,
+        messages: chatMessages,
+        onDelta: (d) => chatSend('quackers:chat-delta', d),
+        log: logEvent,
+      });
+      chatSend('quackers:chat-typing', false);
+
+      if (text) {
+        chatMessages.push({
+          role: 'assistant',
+          content: text,
+          ...(toolCalls.length ? { tool_calls: toolCalls.map(toApiToolCall) } : {}),
+        });
+        chatTranscript.push({ role: 'duck', text });
+        chatSend('quackers:chat-turn-end', text);
+      } else if (toolCalls.length) {
+        chatMessages.push({ role: 'assistant', content: null, tool_calls: toolCalls.map(toApiToolCall) });
+      }
+
+      if (!toolCalls.length) break; // settled
+
+      for (const tc of toolCalls) {
+        const r = await runChatTool(tc);
+        chatMessages.push({ role: 'tool', tool_call_id: tc.id, content: String(r.output) });
+        if (r.image) {
+          chatMessages.push({
+            role: 'user',
+            content: [
+              { type: 'text', text: r.imageNote || 'This is my screen right now.' },
+              { type: 'image_url', image_url: { url: r.image } },
+            ],
+          });
+        }
+        if (r.close) closeAfter = true;
+        if (r.switchVoice) switchVoiceAfter = true;
+      }
+    }
+  } catch (err) {
+    logEvent('chat-loop-error', { error: String(err && err.message) });
+  } finally {
+    chatBusy = false;
+    chatSend('quackers:chat-typing', false);
+    chatSend('quackers:chat-idle'); // re-enable the input box
+  }
+
+  if (switchVoiceAfter) {
+    endChat({ digest: true });
+    chatSend('quackers:chat-switch-voice');
+  } else if (closeAfter) {
+    endChat({ digest: true, tellRenderer: true });
+  }
+}
+
+async function runChatTool(tc) {
+  const { name, args } = tc;
+  try {
+    switch (name) {
+      case 'emote':
+        chatSend('quackers:chat-emote', String(args.emotion || 'happy'));
+        return { output: 'ok' };
+      case 'recall': {
+        const res = await brain.runRecall({ spine, apiKey: loadApiKey(), query: String(args.query || ''), log: logEvent });
+        return { output: res.output };
+      }
+      case 'remember':
+        spine.addFact(String(args.note || ''), 'told-directly', 8);
+        backfillEmbeddings();
+        return { output: 'saved to memory' };
+      case 'remember_name': {
+        const clean = String(args.name || '').slice(0, 60).trim();
+        if (clean) {
+          const first = !spine.userName();
+          spine.setUserName(clean);
+          if (first) spine.addFact(`His name is ${clean}`, 'person', 10);
+          backfillEmbeddings();
+          logEvent('imprinted-name', { name: clean, first, mode: 'chat' });
+        }
+        return { output: 'imprinted' };
+      }
+      case 'look_at_screen':
+      case 'look_at_app': {
+        // v1 chat routes both through the full-screen grab (+cursor close-up);
+        // app-specific isolation is a voice-parity follow-up.
+        chatSend('quackers:chat-looking', true);
+        let shot;
+        try { shot = await captureFullScreen(); } finally { chatSend('quackers:chat-looking', false); }
+        if (shot.error) return { output: shot.error };
+        return {
+          output: 'looked — his screen is attached below; react to what is actually there, specifics not vibes',
+          image: `data:image/jpeg;base64,${shot.jpegBase64}`,
+          imageNote: 'This is my screen right now.',
+        };
+      }
+      case 'switch_to_voice':
+        return { output: 'switching to voice', switchVoice: true };
+      case 'end_chat':
+        return { output: 'closing chat', close: true };
+      default:
+        return { output: `unknown tool ${name}` };
+    }
+  } catch (err) {
+    logEvent('chat-tool-error', { name, error: String(err && err.message) });
+    return { output: 'that did not work just now — carry on gracefully' };
+  }
+}
+
+function endChat({ digest = false, tellRenderer = false } = {}) {
+  if (win && !win.isDestroyed()) win.setFocusable(false); // restore the click-through pet
+  if (tellRenderer) chatSend('quackers:chat-close');
+  if (!chatMessages) return;
+  chatMessages = null;
+  if (digest && chatTranscript.length >= 2) {
+    const lines = chatTranscript.slice();
+    logEvent('conversation-transcript', { lines, mode: 'chat' });
+    brain.runDigest({ spine, apiKey: loadApiKey(), lines, log: logEvent }).then((d) => {
+      if (d) { backfillEmbeddings(); chatSend('quackers:digested'); }
+    });
+  }
+  chatTranscript = [];
+  logEvent('chat-close', {});
+}
+
+ipcMain.handle('chat-open', () => {
+  const apiKey = loadApiKey();
+  if (!apiKey) return { error: 'no-voice' };
+  spine.touchConversation();
+  chatMessages = [
+    { role: 'system', content: chat.buildChatInstructions({ spine, ambientLine: senses.ambientLine() }) },
+    { role: 'system', content: 'Open the chat as yourself — one tiny warm hello text. Use his name if you know it, and if there is a live thread worth touching (yesterday, a plan, a running bit), brush it in a few words. Short.' },
+  ];
+  chatTranscript = [];
+  if (win && !win.isDestroyed()) { win.setFocusable(true); win.focus(); }
+  logEvent('chat-open', {});
+  runChatLoop(); // greeting streams in; don't block the open
+  return { ok: true };
+});
+
+ipcMain.handle('chat-send', async (_event, text) => {
+  if (!chatMessages) return { error: 'chat not open' };
+  if (chatBusy) return { busy: true };
+  const clean = String(text || '').slice(0, 4000);
+  if (!clean.trim()) return { ok: true };
+  chatMessages.push({ role: 'user', content: clean });
+  chatTranscript.push({ role: 'user', text: clean });
+  await runChatLoop();
+  return { ok: true };
+});
+
+ipcMain.handle('chat-close', () => { endChat({ digest: true }); return { ok: true }; });
 
 // ---------------------------------------------------------------------------
 // Digestion — after each conversation, a background model turns the

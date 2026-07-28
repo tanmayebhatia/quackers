@@ -383,6 +383,13 @@ const REALTIME_TOOLS = [
   },
   {
     type: 'function',
+    name: 'switch_to_chat',
+    description:
+      "Switch from talking to TEXTING — open the little chat window so he can type to you instead of speak. Call when he asks to switch to chat/text mode, type instead of talk, or 'let's chat'. Say a tiny one-line goodbye-to-voice out loud first ('kay, tap tap — texting now'), then call this; the voice session ends and the chat opens carrying all the same memory.",
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    type: 'function',
     name: 'end_conversation',
     description: 'End the voice conversation and go back to pottering around the screen. Call after saying goodbye.',
     parameters: { type: 'object', properties: {} },
