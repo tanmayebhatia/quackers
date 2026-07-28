@@ -22,6 +22,17 @@ sleep 1
 cp dist/Quackers-darwin-arm64/Quackers.app/Contents/Resources/app.asar \
    "$APP/Contents/Resources/app.asar"
 
+# Also carry the app icon across. Swapping only app.asar used to leave the
+# installed bundle stuck on whatever icon it was FIRST built with (the default
+# Electron icon, for any install predating assets/icon.icns) — the code updated,
+# the icon never did. Like the asar, the icns isn't part of the main executable's
+# code identity, so the Screen-Recording grant still survives.
+cp dist/Quackers-darwin-arm64/Quackers.app/Contents/Resources/electron.icns \
+   "$APP/Contents/Resources/electron.icns"
+touch "$APP" # bump mtime so macOS re-reads the bundle
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+[ -x "$LSREGISTER" ] && "$LSREGISTER" -f "$APP" 2>/dev/null || true
+
 echo "Relaunching…"
 open "$APP"
-echo "Done — screen grant preserved."
+echo "Done — screen grant preserved, icon refreshed."
