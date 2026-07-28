@@ -251,6 +251,7 @@ let lastTossReportAt = 0;
 // ambient states from the main process
 let quietMode = false; // Do Not Disturb — the duck goes librarian
 let callMode = false; // he's in a meeting — the duck goes VERY librarian
+let chatting = false; // text-chat panel is open — stay put so the panel doesn't drift
 let musicNow = null; // {track, artist} while his music plays — headphones on
 let noteIn = 0; // cadence for the little ♪ particles while bobbing
 let dreamGlow = false; // the slow mind is dreaming (memory consolidation)
@@ -394,8 +395,9 @@ function plan() {
     return;
   }
 
-  // during a conversation, stay present: no wandering off or napping
-  if (voiceState !== 'idle') {
+  // during a conversation (voice OR text chat), stay present: no wandering off
+  // or napping — and for chat it also keeps the panel anchored above a still duck
+  if (voiceState !== 'idle' || chatting) {
     duck.state = 'idle';
     duck.stateT = 0;
     duck.stateDur = 2 + Math.random() * 3;
@@ -1420,6 +1422,16 @@ window.duckAPI = {
   isEgg() {
     return egg.mode;
   },
+  // where the body is right now, in CSS px — the chat panel reads this to hover
+  // next to the duck and follow it around the screen.
+  duckRect() {
+    return duckBounds();
+  },
+  // chat panel open/closed — keeps the duck present and still while typing
+  setChatting(on) {
+    chatting = !!on;
+    if (on) { duck.state = 'idle'; duck.stateT = 0; duck.crumb = null; }
+  },
   hatchNow() {
     if (!egg.mode) return;
     // commit the hatch to the spine IMMEDIATELY — the voice session builds its
@@ -1885,7 +1897,11 @@ window.addEventListener('mousemove', (e) => {
     return;
   }
 
-  setInteractive(overDuck(x, y) || (window.stageAPI && window.stageAPI.overStage(x, y)));
+  setInteractive(
+    overDuck(x, y) ||
+      (window.stageAPI && window.stageAPI.overStage(x, y)) ||
+      (window.chatAPI && window.chatAPI.overPanel(x, y))
+  );
 });
 
 window.addEventListener('mousedown', (e) => {
