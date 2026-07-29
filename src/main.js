@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage, globalShortcut, systemPreferences, desktopCapturer, powerMonitor, Notification, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage, globalShortcut, systemPreferences, desktopCapturer, powerMonitor, Notification, shell, safeStorage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -11,6 +11,9 @@ const brain = require('./brain');
 const chat = require('./chat');
 const tricks = require('./tricks');
 const workshop = require('./workshop');
+const privacy = require('./privacy');
+const computerPrimitives = require('./computer-primitives');
+const integrations = require('./integrations');
 
 const TOGGLE_ACCELERATOR = 'Control+Shift+Q';
 const TALK_ACCELERATOR = 'Control+Shift+T';
@@ -135,6 +138,9 @@ function buildTrayMenu() {
     { label: 'Talk / Hush', accelerator: TALK_ACCELERATOR, click: toggleTalk },
     { label: 'Chat (type instead)…', click: requestChat },
     { label: 'Clip that! (last 15s)', accelerator: CLIP_ACCELERATOR, click: requestClip },
+    { label: 'Our scrapbook…', click: openScrapbookWindow },
+    { label: 'Sticky notes & work guard…', click: openRemindersWindow },
+    { label: 'Connect coding tools…', click: openIntegrationsWindow },
     { label: 'What Quackers remembers…', click: openMemoryWindow },
     { label: 'Fix screen vision…', click: openScreenSettings },
     {
@@ -154,10 +160,11 @@ function buildTrayMenu() {
       },
     },
   ];
-  if (!loadApiKey()) {
-    items.push({ type: 'separator' });
-    items.push({ label: 'Give Quackers a voice…', click: openKeyWindow });
-  }
+  items.push({ type: 'separator' });
+  items.push({
+    label: hasConfiguredApiKey() ? 'Change voice key…' : 'Give Quackers a voice…',
+    click: openKeyWindow,
+  });
   items.push({ type: 'separator' });
   items.push({ label: 'Quit Quackers', click: () => app.quit() });
   return Menu.buildFromTemplate(items);
@@ -196,7 +203,11 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin') app.dock.hide();
 
   spine.init(app.getPath('userData'));
-  backfillEmbeddings(); // ensure all existing memories are searchable
+  try {
+    privacy.scrubLogFile(path.join(app.getPath('userData'), 'interactions.jsonl'));
+  } catch {
+    /* old diagnostics must never block startup */
+  }
   logEvent('startup', {
     stage: spine.stage(),
     screenPermission: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'n/a',
@@ -249,6 +260,7 @@ app.whenReady().then(() => {
   startImpulseLoop();
   startDreamLoop();
   startBuddyServer();
+  startReminderLoop();
 
   // brand-new install: pick your quacker + name it before the egg drops.
   // Existing ducks (or a first run that already onboarded) skip this forever.
@@ -270,7 +282,7 @@ function openOnboardingWindow() {
   }
   onboardWin = new BrowserWindow({
     width: 560,
-    height: 560,
+    height: 640,
     title: 'Pick your Quacker',
     resizable: false,
     fullscreenable: false,
@@ -282,8 +294,10 @@ function openOnboardingWindow() {
   });
 }
 
-ipcMain.on('onboard-complete', (_event, { skin, name }) => {
-  spine.setIdentity(skin, name);
+ipcMain.on('onboard-complete', (_event, { skin, duckName, personName }) => {
+  const cleanPersonName = String(personName || '').replace(/[\r\n]+/g, ' ').slice(0, 60).trim();
+  if (!cleanPersonName) return;
+  spine.setIdentity(skin, duckName, cleanPersonName);
   logEvent('onboarded', { skin: spine.skin(), duckName: spine.duckName() });
   if (onboardWin) onboardWin.close();
   if (win) win.webContents.send('quackers:egg-drop'); // and so it begins
@@ -329,11 +343,27 @@ function startImpulseLoop() {
       lastOnCall = ambient.onCall;
       win.webContents.send('quackers:call', ambient.onCall);
     }
+    const idle = powerMonitor.getSystemIdleTime(); // seconds
+
+    // A work guard is an explicit recurring promise, separate from the duck's
+    // surprise-impulse budget. It still observes presence, Focus, and calls.
+    if (
+      !ambient.dnd &&
+      !ambient.onCall &&
+      idle <= 60 &&
+      spine.recordWorkGuardNudge(ambient.app, ambient.appMinutes)
+    ) {
+      const guard = spine.workGuard();
+      const note = spine.addReminder({
+        text: guard.message || `You’ve been in ${ambient.app} for ${Math.round(ambient.appMinutes)} minutes. Tiny reset?`,
+        color: 'mint',
+      });
+      if (note) deliverStickyReminder(note, { notify: true });
+    }
+
     if (!win.isVisible()) return;
     if (ambient.dnd) return; // Focus on = the duck does not exist audibly
     if (ambient.onCall) return; // never speak over a meeting
-
-    const idle = powerMonitor.getSystemIdleTime(); // seconds
 
     if (idle > 15 * 60) {
       if (!wasAway) {
@@ -357,6 +387,18 @@ function startImpulseLoop() {
     const due = spine.dueSoonLoop(45);
     if (due && spine.canImpulse('loop')) {
       win.webContents.send('quackers:impulse', { kind: 'loop-due', text: due.description });
+      return;
+    }
+    // One thought from the latest dream may knock once. It uses the same
+    // renderer acknowledgment and global restraint budget as every other
+    // proactive moment, and expires rather than nagging.
+    const dreamOffer = spine.pendingDreamOffer();
+    if (dreamOffer && spine.canImpulse('dream')) {
+      win.webContents.send('quackers:impulse', {
+        kind: 'dream',
+        text: dreamOffer.opener,
+        dreamId: dreamOffer.dreamId,
+      });
       return;
     }
     // occasionally surface an undated open loop (rare by design)
@@ -386,10 +428,31 @@ function startImpulseLoop() {
 
 // The renderer confirms an impulse was actually SHOWN before we charge the
 // hard daily budget — a nudge dropped mid-conversation must not count.
-ipcMain.on('impulse-shown', (_event, kind) => {
-  const k = String(kind || '').slice(0, 20);
+ipcMain.on('impulse-shown', (_event, payload) => {
+  const data = payload && typeof payload === 'object' ? payload : { kind: payload };
+  const k = String(data.kind || '').slice(0, 20);
+  if (k === 'dream' && data.dreamId) spine.markDreamOfferShown(String(data.dreamId).slice(0, 80));
   spine.recordImpulse(k === 'loop-due' ? 'loop' : k); // due-nudges share the loop cadence
 });
+
+function takeDreamOfferForConversation(prompted) {
+  const offer = spine.unsharedDreamOffer();
+  if (!offer) return { ok: false, reason: 'no unshared overnight thought' };
+  if (!prompted && !spine.canImpulse('dream')) {
+    return { ok: false, reason: 'not a good interruption moment yet' };
+  }
+  spine.markDreamOfferShown(offer.dreamId);
+  if (!prompted) spine.recordImpulse('dream');
+  logEvent('dream-offer-conversation', {
+    ok: true,
+    mode: prompted ? 'prompted' : 'lull',
+  });
+  return { ok: true, opener: offer.opener, detail: offer.detail };
+}
+
+ipcMain.handle('dream-offer-take', (_event, prompted) =>
+  takeDreamOfferForConversation(Boolean(prompted))
+);
 
 // ---------------------------------------------------------------------------
 // The dream loop — when the duck has been left alone and it's been ~a day,
@@ -409,7 +472,12 @@ async function runDream(trigger) {
     const ok = await dreamer.dream({ spine, apiKey: key, model: brain.DREAM_MODEL, logEvent });
     if (ok) {
       await backfillEmbeddings();
-      if (win) win.webContents.send('quackers:dreamed');
+      if (win) {
+        const overnight = spine.activeDreamMind();
+        win.webContents.send('quackers:dreamed', {
+          hasOffer: Boolean(overnight && overnight.offer),
+        });
+      }
       logEvent('dream-done', { trigger });
     }
   } finally {
@@ -456,7 +524,7 @@ function startBuddyServer() {
         if (now - lastBuddyAt < 20000) return; // don't let a chatty hook spam the duck
         lastBuddyAt = now;
         if (type === 'pr-opened') {
-          spine.addHappening('coding', `he opened a PR${detail ? ` — "${detail}"` : ''}`);
+          spine.addHappening('coding', `${spine.userName() || 'your person'} opened a PR${detail ? ` — "${detail}"` : ''}`);
         } else if (['run-done', 'run-failed', 'tests-passed', 'tests-failed'].includes(type)) {
           spine.addHappening('coding', `${type}${detail ? ` (${detail})` : ''}`);
         }
@@ -489,13 +557,14 @@ ipcMain.on('hide-now', () => {
 // key never enters the renderer)
 // ---------------------------------------------------------------------------
 
-// Dev-phase interaction log: everything the duck hears, says, does, and sees
-// (as text/events — never audio or images) goes to one local JSONL file.
+// Local diagnostics are metadata-only. Conversation text, model output,
+// memories, names, and screen contents never enter the interaction log.
 function logEvent(type, data) {
   try {
     fs.appendFileSync(
       path.join(app.getPath('userData'), 'interactions.jsonl'),
-      JSON.stringify({ at: new Date().toISOString(), type, data }) + '\n'
+      JSON.stringify(privacy.privateLogEntry(type, data)) + '\n',
+      { mode: 0o600 }
     );
   } catch {
     /* logging must never break the duck */
@@ -514,14 +583,74 @@ function readKeyFrom(file) {
   }
 }
 
+function encryptedKeyPath() {
+  return path.join(app.getPath('userData'), 'openai-key.enc');
+}
+
+function readEncryptedKey() {
+  try {
+    // A keyless first launch should never touch Keychain. Besides doing no
+    // useful work, the availability probe can wait on macOS UI while a newly
+    // packaged app is establishing its secure-storage identity.
+    if (!fs.existsSync(encryptedKeyPath())) return null;
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    const encrypted = Buffer.from(fs.readFileSync(encryptedKeyPath(), 'utf8').trim(), 'base64');
+    return safeStorage.decryptString(encrypted).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveEncryptedKey(key) {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('macOS secure key storage is unavailable; unlock your login keychain and try again');
+  }
+  const target = encryptedKeyPath();
+  const tmp = `${target}.tmp`;
+  const encrypted = safeStorage.encryptString(key).toString('base64');
+  fs.writeFileSync(tmp, `${encrypted}\n`, { mode: 0o600 });
+  fs.renameSync(tmp, target);
+  fs.chmodSync(target, 0o600);
+}
+
+function readAndMigrateLegacyUserKey() {
+  const legacy = path.join(app.getPath('userData'), '.env');
+  const key = readKeyFrom(legacy);
+  if (!key) return null;
+  try {
+    saveEncryptedKey(key);
+    fs.unlinkSync(legacy);
+  } catch {
+    // Keep the existing key readable until secure storage is available. Never
+    // delete the only working copy unless encryption completed successfully.
+  }
+  return key;
+}
+
 function loadApiKey() {
-  // env var → user-data .env (survives repackaging) → bundled/app .env
+  // Environment/app .env remain developer-only options. Keys entered through
+  // the UI are encrypted with Electron safeStorage (macOS Keychain-backed).
   return (
     (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()) ||
-    readKeyFrom(path.join(app.getPath('userData'), '.env')) ||
+    readEncryptedKey() ||
+    readAndMigrateLegacyUserKey() ||
     readKeyFrom(path.join(app.getAppPath(), '.env')) ||
     readKeyFrom(path.join(path.dirname(app.getPath('exe')), '..', 'Resources', '.env')) ||
     null
+  );
+}
+
+// Startup/UI status must never decrypt a Keychain item. An ad-hoc development
+// signature can legitimately change between builds, and macOS may pause access
+// to an item written by the prior signature. Decryption happens only when the
+// person intentionally uses an API-powered feature.
+function hasConfiguredApiKey() {
+  return Boolean(
+    (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()) ||
+    fs.existsSync(encryptedKeyPath()) ||
+    readKeyFrom(path.join(app.getPath('userData'), '.env')) ||
+    readKeyFrom(path.join(app.getAppPath(), '.env')) ||
+    readKeyFrom(path.join(path.dirname(app.getPath('exe')), '..', 'Resources', '.env'))
   );
 }
 
@@ -545,7 +674,7 @@ function buildRealtimeSessionConfig() {
       },
       output: { voice: VOICE },
     },
-    tools: brain.REALTIME_TOOLS,
+    tools: brain.buildRealtimeTools(spine.userName()),
     tool_choice: 'auto',
   };
 }
@@ -657,15 +786,19 @@ function screenPermissionMissing() {
 // exactly where the fix lives.
 function permissionError() {
   return {
-    error:
+    error: brain.personalizeStaticPrompt(
       "Your eyes aren't hooked up yet: macOS hasn't granted Quackers screen recording. Tell him, lightly and in ONE sentence, that your eyes need switching on — the little duck in his menu bar has a 'Fix screen vision' button that opens the right settings page (and the app needs a quick restart after). Then move on cheerfully.",
+      spine.userName()
+    ),
   };
 }
 
 function visionRevokedError() {
   return {
-    error:
+    error: brain.personalizeStaticPrompt(
       "Your eyes got switched off: macOS quietly expires the Screen Recording permission sometimes, and it just did. Tell him, lightly and in ONE sentence, that macOS turned your eyes off again and the little duck in his menu bar has a 'Fix screen vision' button that re-opens the right settings page (quick app restart after). Then move on cheerfully.",
+      spine.userName()
+    ),
   };
 }
 
@@ -854,12 +987,18 @@ ipcMain.handle('memory-add', (_event, note) => {
   return true;
 });
 
+ipcMain.handle('dream-research-queue', (_event, input) => {
+  const request = spine.queueDreamResearch(input || {});
+  logEvent('dream-research-queued', { ok: Boolean(request), count: request ? 1 : 0 });
+  return request;
+});
+
 ipcMain.handle('remember-name', (_event, name) => {
-  const clean = String(name || '').slice(0, 60).trim();
+  const clean = String(name || '').replace(/[\r\n]+/g, ' ').slice(0, 60).trim();
   if (!clean) return false;
   const isFirst = !spine.userName();
   spine.setUserName(clean);
-  if (isFirst) spine.addFact(`His name is ${clean}`, 'person', 10);
+  if (isFirst) spine.addFact(`The person's name is ${clean}`, 'person', 10);
   backfillEmbeddings();
   logEvent('imprinted-name', { name: clean, first: isFirst });
   return true;
@@ -918,7 +1057,13 @@ ipcMain.handle('game-result', (_event, { game, winner }) => {
 
 // music rides along so a freshly-loaded renderer starts with the current
 // state instead of waiting for the next change
-ipcMain.handle('stage-get', () => ({ ...spine.stageInfo(), ...spine.identity(), groundOffset, music: senses.snapshot().music }));
+ipcMain.handle('stage-get', () => ({
+  ...spine.stageInfo(),
+  ...spine.identity(),
+  userName: spine.userName(),
+  groundOffset,
+  music: senses.snapshot().music,
+}));
 
 ipcMain.handle('hatch', () => {
   const hatched = spine.hatch();
@@ -932,10 +1077,16 @@ ipcMain.handle('key-save', (_event, key) => {
   const clean = String(key || '').trim();
   if (!/^sk-/.test(clean)) return { ok: false, error: 'that does not look like an OpenAI key (starts with sk-)' };
   try {
-    fs.writeFileSync(path.join(app.getPath('userData'), '.env'), `OPENAI_API_KEY=${clean}\n`, { mode: 0o600 });
+    saveEncryptedKey(clean);
+    try {
+      fs.unlinkSync(path.join(app.getPath('userData'), '.env'));
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
     refreshTray();
     if (win) win.webContents.send('quackers:voice-granted');
     logEvent('key-saved', {});
+    backfillEmbeddings();
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -958,6 +1109,14 @@ ipcMain.handle('clip-save', (_event, arrayBuffer) => {
     const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
     const file = path.join(app.getPath('desktop'), `quackers-${stamp}.webm`);
     fs.writeFileSync(file, buf);
+    spine.addScrapbookEntry({
+      kind: 'clip',
+      title: 'A tiny Quackers movie',
+      body: `Saved by ${spine.userName() || 'their person'} — fifteen seconds from life on the desktop.`,
+      assetPath: file,
+      source: 'clip',
+      color: 'sky',
+    });
     logEvent('clip-saved', { file, bytes: buf.length });
     new Notification({ title: 'Quackers', body: `Clip saved to Desktop (${Math.round(buf.length / 1024)} KB)` }).show();
     return { ok: true, file };
@@ -997,7 +1156,7 @@ ipcMain.handle('recall', (_event, query) =>
 
 ipcMain.handle('think-hard', async (_event, { question, recent }) => {
   const res = await brain.runThinkHard({ spine, apiKey: loadApiKey(), question, recent, log: logEvent });
-  return { answer: res.answer, framed: brain.frameThinkHard(res.answer) };
+  return { answer: res.answer, framed: brain.frameThinkHard(res.answer, spine.userName() || 'your person') };
 });
 
 // ---------------------------------------------------------------------------
@@ -1034,6 +1193,7 @@ async function runChatLoop() {
       const { text, toolCalls } = await chat.runChatTurn({
         apiKey,
         messages: chatMessages,
+        personName: spine.userName(),
         onDelta: (d) => chatSend('quackers:chat-delta', d),
         log: logEvent,
       });
@@ -1100,12 +1260,64 @@ async function runChatTool(tc) {
         spine.addFact(String(args.note || ''), 'told-directly', 8);
         backfillEmbeddings();
         return { output: 'saved to memory' };
+      case 'research_tonight': {
+        const request = spine.queueDreamResearch({
+          topic: String(args.topic || ''),
+          question: String(args.question || ''),
+        });
+        return {
+          output: request
+            ? `queued for the next dream: ${request.topic}; it will return with sources and an invitation, not interrupt on its own`
+            : 'the research topic was empty',
+        };
+      }
+      case 'offer_dream_thought': {
+        const offer = takeDreamOfferForConversation(Boolean(args.prompted));
+        return {
+          output: offer.ok
+            ? `Offer this thought now, briefly: "${offer.opener}" Then ask if they want to hear more.`
+            : `${offer.reason}; do not mention the overnight thought right now`,
+        };
+      }
+      case 'scrapbook_moment': {
+        const saved = spine.addScrapbookEntry({
+          kind: 'moment',
+          title: String(args.title || ''),
+          body: String(args.body || ''),
+          color: String(args.color || 'butter'),
+          source: 'chat',
+        });
+        return { output: saved ? 'pinned into the shared scrapbook' : 'nothing to pin' };
+      }
+      case 'leave_sticky_note': {
+        const reminder = spine.addReminder({
+          text: String(args.text || ''),
+          dueAt: String(args.due_at || ''),
+          color: String(args.color || 'butter'),
+        });
+        if (reminder && reminder.status === 'open') deliverStickyReminder(reminder);
+        notifyReminderWindows();
+        return {
+          output: reminder
+            ? (reminder.status === 'open' ? 'the physical sticky is on the desktop now' : `scheduled for ${reminder.dueAt}`)
+            : 'nothing to stick',
+        };
+      }
+      case 'set_work_guard': {
+        const guard = spine.setWorkGuard({ minutes: Number(args.minutes), message: String(args.message || '') });
+        notifyReminderWindows();
+        return { output: `work guard on every ${guard.minutes} active minutes; Focus, calls, and idle time stay quiet` };
+      }
+      case 'clear_work_guard':
+        spine.clearWorkGuard();
+        notifyReminderWindows();
+        return { output: 'work guard off' };
       case 'remember_name': {
-        const clean = String(args.name || '').slice(0, 60).trim();
+        const clean = String(args.name || '').replace(/[\r\n]+/g, ' ').slice(0, 60).trim();
         if (clean) {
           const first = !spine.userName();
           spine.setUserName(clean);
-          if (first) spine.addFact(`His name is ${clean}`, 'person', 10);
+          if (first) spine.addFact(`The person's name is ${clean}`, 'person', 10);
           backfillEmbeddings();
           logEvent('imprinted-name', { name: clean, first, mode: 'chat' });
         }
@@ -1120,7 +1332,7 @@ async function runChatTool(tc) {
         try { shot = await captureFullScreen(); } finally { chatSend('quackers:chat-looking', false); }
         if (shot.error) return { output: shot.error };
         return {
-          output: 'looked — his screen is attached below; react to what is actually there, specifics not vibes',
+          output: `looked — ${spine.userName() || 'your person'}'s screen is attached below; react to what is actually there, specifics not vibes`,
           image: `data:image/jpeg;base64,${shot.jpegBase64}`,
           imageNote: 'This is my screen right now.',
         };
@@ -1160,7 +1372,7 @@ ipcMain.handle('chat-open', () => {
   spine.touchConversation();
   chatMessages = [
     { role: 'system', content: chat.buildChatInstructions({ spine, ambientLine: senses.ambientLine() }) },
-    { role: 'system', content: 'Open the chat as yourself — one tiny warm hello text. Use his name if you know it, and if there is a live thread worth touching (yesterday, a plan, a running bit), brush it in a few words. Short.' },
+    { role: 'system', content: `Open the chat as yourself — one tiny warm hello text. Use ${spine.userName() || 'your person'}'s name, and if there is a live thread worth touching (yesterday, a plan, a running bit), brush it in a few words. Short.` },
   ];
   chatTranscript = [];
   if (win && !win.isDestroyed()) { win.setFocusable(true); win.focus(); }
@@ -1190,7 +1402,7 @@ ipcMain.handle('chat-close', () => { endChat({ digest: true }); return { ok: tru
 
 ipcMain.on('digest-transcript', async (_event, lines) => {
   if (!Array.isArray(lines)) return;
-  logEvent('conversation-transcript', { lines }); // archive raw, even short ones
+  logEvent('conversation-transcript', { lines, mode: 'voice' });
   const digest = await brain.runDigest({ spine, apiKey: loadApiKey(), lines, log: logEvent });
   if (digest) {
     backfillEmbeddings(); // make the new memories retrievable
@@ -1211,6 +1423,375 @@ ipcMain.handle('spine-edit', (_event, { id, statement }) => {
   const ok = spine.updateFact(id, statement);
   if (ok) backfillEmbeddings();
   return ok;
+});
+ipcMain.handle('dream-settings-get', () => spine.dreamSettings());
+ipcMain.handle('dream-settings-set', (_event, settings) => {
+  const updated = spine.setDreamSettings(settings || {});
+  logEvent('dream-settings', { on: updated.researchEnabled });
+  return updated;
+});
+ipcMain.handle('dream-source-open', async (_event, rawUrl) => {
+  const url = String(rawUrl || '').slice(0, 1200);
+  if (!/^https?:\/\//i.test(url)) return false;
+  await shell.openExternal(url);
+  return true;
+});
+
+// ---------------------------------------------------------------------------
+// Scrapbook — a local, human-curated layer above memory. Memory helps the duck
+// think; scrapbook is for the person to revisit.
+// ---------------------------------------------------------------------------
+
+let scrapbookWin = null;
+
+function openScrapbookWindow() {
+  if (scrapbookWin) {
+    scrapbookWin.focus();
+    return;
+  }
+  scrapbookWin = new BrowserWindow({
+    width: 860,
+    height: 700,
+    minWidth: 600,
+    minHeight: 480,
+    title: `${spine.duckName()}'s scrapbook`,
+    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+  });
+  scrapbookWin.loadFile(path.join(__dirname, 'renderer', 'scrapbook.html'));
+  scrapbookWin.on('closed', () => { scrapbookWin = null; });
+}
+
+ipcMain.handle('scrapbook-add', (_event, entry) => spine.addScrapbookEntry(entry || {}));
+ipcMain.handle('scrapbook-list', () => spine.scrapbookEntries());
+ipcMain.handle('scrapbook-pin', (_event, { id, pinned }) => spine.setScrapbookPinned(String(id || ''), pinned));
+ipcMain.handle('scrapbook-delete', (_event, id) => spine.deleteItem('scrapbook', String(id || '')));
+ipcMain.handle('scrapbook-open-asset', async (_event, id) => {
+  const entry = spine.scrapbookEntries().find((item) => item.id === id);
+  if (!entry || !entry.assetPath || !fs.existsSync(entry.assetPath)) return { ok: false, error: 'that keepsake file is no longer here' };
+  const error = await shell.openPath(entry.assetPath);
+  return error ? { ok: false, error } : { ok: true };
+});
+
+// ---------------------------------------------------------------------------
+// Physical reminders — each due reminder becomes its own movable, always-on-top
+// sticky. Closing is explicit: done, snooze, or put away.
+// ---------------------------------------------------------------------------
+
+let remindersWin = null;
+const stickyWindows = new Map();
+const stickyDeliveryQueue = [];
+let stickyDeliveryActive = null;
+
+function notifyReminderWindows() {
+  if (remindersWin && !remindersWin.isDestroyed()) remindersWin.webContents.send('quackers:reminders-changed');
+}
+
+function stickyBounds(reminder) {
+  const area = screen.getPrimaryDisplay().workArea;
+  const fallback = {
+    width: 300,
+    height: 290,
+    x: area.x + area.width - 330 - (stickyWindows.size % 3) * 24,
+    y: area.y + 40 + (stickyWindows.size % 5) * 28,
+  };
+  const wanted = reminder.bounds || fallback;
+  const width = Math.max(230, Math.min(520, Number(wanted.width) || fallback.width));
+  const height = Math.max(210, Math.min(620, Number(wanted.height) || fallback.height));
+  return {
+    width,
+    height,
+    x: Math.max(area.x, Math.min(area.x + area.width - width, Number(wanted.x) || fallback.x)),
+    y: Math.max(area.y, Math.min(area.y + area.height - height, Number(wanted.y) || fallback.y)),
+  };
+}
+
+function closeSticky(id) {
+  const noteWin = stickyWindows.get(id);
+  if (noteWin && !noteWin.isDestroyed()) noteWin.close();
+}
+
+function finishStickyDelivery(id, phase = 'ack') {
+  if (!stickyDeliveryActive || stickyDeliveryActive.id !== id) return;
+  clearTimeout(stickyDeliveryActive.timer);
+  const { notify } = stickyDeliveryActive;
+  stickyDeliveryActive = null;
+  const reminder = spine.reminders(true).find((item) => item.id === id);
+  if (reminder && !['done', 'hidden'].includes(reminder.status)) {
+    showStickyReminder(reminder, { notify });
+  }
+  logEvent('sticky-delivery', { phase });
+  setTimeout(pumpStickyDeliveries, 250);
+}
+
+function pumpStickyDeliveries() {
+  if (stickyDeliveryActive) return;
+  let job = null;
+  while (stickyDeliveryQueue.length && !job) {
+    const candidate = stickyDeliveryQueue.shift();
+    const reminder = spine.reminders(true).find((item) => item.id === candidate.id);
+    if (reminder && !['done', 'hidden'].includes(reminder.status)) job = { ...candidate, reminder };
+  }
+  if (!job) return;
+  if (!win || win.isDestroyed() || !win.webContents) {
+    showStickyReminder(job.reminder, { notify: job.notify });
+    setTimeout(pumpStickyDeliveries, 0);
+    return;
+  }
+
+  stickyDeliveryActive = { id: job.id, notify: job.notify, timer: null };
+  const begin = () => {
+    if (!stickyDeliveryActive || stickyDeliveryActive.id !== job.id || !win || win.isDestroyed()) {
+      finishStickyDelivery(job.id, 'fallback');
+      return;
+    }
+    win.webContents.send('quackers:sticky-delivery', {
+      id: job.id,
+      text: job.reminder.text,
+      color: job.reminder.color,
+    });
+    stickyDeliveryActive.timer = setTimeout(() => finishStickyDelivery(job.id, 'fallback'), 5200);
+  };
+
+  if (!win.isVisible()) {
+    win.showInactive();
+    win.webContents.send('quackers:arrive');
+    setTimeout(begin, 700);
+  } else {
+    begin();
+  }
+}
+
+function deliverStickyReminder(reminder, { notify = false } = {}) {
+  if (!reminder || ['done', 'hidden'].includes(reminder.status)) return false;
+  if (stickyWindows.has(reminder.id)) return showStickyReminder(reminder, { notify });
+  if (
+    (stickyDeliveryActive && stickyDeliveryActive.id === reminder.id) ||
+    stickyDeliveryQueue.some((item) => item.id === reminder.id)
+  ) return true;
+  stickyDeliveryQueue.push({ id: reminder.id, notify: Boolean(notify) });
+  pumpStickyDeliveries();
+  return true;
+}
+
+function showStickyReminder(reminder, { notify = false } = {}) {
+  if (!reminder || reminder.status === 'done') return false;
+  const existing = stickyWindows.get(reminder.id);
+  if (existing && !existing.isDestroyed()) {
+    existing.show();
+    existing.focus();
+    return true;
+  }
+  const noteWin = new BrowserWindow({
+    ...stickyBounds(reminder),
+    frame: false,
+    transparent: false,
+    resizable: true,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    title: 'A note from Quackers',
+    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+  });
+  stickyWindows.set(reminder.id, noteWin);
+  noteWin.setAlwaysOnTop(true, 'floating');
+  noteWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  noteWin.loadFile(path.join(__dirname, 'renderer', 'sticky.html'), { query: { id: reminder.id } });
+  let boundsTimer = null;
+  const persistBounds = () => {
+    clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => {
+      if (!noteWin.isDestroyed()) spine.updateReminder(reminder.id, { bounds: noteWin.getBounds() });
+    }, 200);
+  };
+  noteWin.on('move', persistBounds);
+  noteWin.on('resize', persistBounds);
+  noteWin.on('closed', () => {
+    clearTimeout(boundsTimer);
+    stickyWindows.delete(reminder.id);
+    notifyReminderWindows();
+  });
+  spine.updateReminder(reminder.id, { status: 'open', shown: true });
+  if (notify) {
+    new Notification({ title: `${spine.duckName()} left you a note`, body: reminder.text.slice(0, 180) }).show();
+  }
+  notifyReminderWindows();
+  return true;
+}
+
+function checkDueReminders() {
+  const now = Date.now();
+  for (const reminder of spine.reminders()) {
+    if (reminder.status === 'scheduled' && Date.parse(reminder.dueAt) <= now) {
+      deliverStickyReminder(reminder, { notify: !reminder.lastShownAt });
+    }
+  }
+}
+
+function startReminderLoop() {
+  setTimeout(() => {
+    for (const reminder of spine.reminders()) {
+      if (reminder.status === 'open') showStickyReminder(reminder);
+    }
+    checkDueReminders();
+  }, 2500);
+  setInterval(checkDueReminders, 30000);
+}
+
+function openRemindersWindow() {
+  if (remindersWin) {
+    remindersWin.focus();
+    return;
+  }
+  remindersWin = new BrowserWindow({
+    width: 620,
+    height: 690,
+    minWidth: 520,
+    minHeight: 500,
+    title: 'Sticky notes & work guard',
+    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+  });
+  remindersWin.loadFile(path.join(__dirname, 'renderer', 'reminders.html'));
+  remindersWin.on('closed', () => { remindersWin = null; });
+}
+
+ipcMain.handle('reminder-add', (_event, input) => {
+  const reminder = spine.addReminder(input || {});
+  if (reminder && reminder.status === 'open') deliverStickyReminder(reminder);
+  notifyReminderWindows();
+  return reminder;
+});
+ipcMain.on('sticky-delivery-ready', (_event, id) => finishStickyDelivery(String(id || ''), 'animated'));
+ipcMain.handle('reminder-list', (_event, includeDone) => spine.reminders(Boolean(includeDone)));
+ipcMain.handle('reminder-get', (_event, id) => spine.reminders(true).find((item) => item.id === id) || null);
+ipcMain.handle('reminder-show', (_event, id) => {
+  const reminder = spine.reminders(true).find((item) => item.id === id);
+  if (!reminder || reminder.status === 'done') return false;
+  return showStickyReminder(reminder);
+});
+ipcMain.handle('reminder-done', (_event, id) => {
+  const updated = spine.updateReminder(String(id || ''), { status: 'done' });
+  closeSticky(String(id || ''));
+  notifyReminderWindows();
+  return updated;
+});
+ipcMain.handle('reminder-snooze', (_event, { id, minutes }) => {
+  const delay = Math.max(5, Math.min(1440, Number(minutes) || 15));
+  const updated = spine.updateReminder(String(id || ''), { dueAt: new Date(Date.now() + delay * 60000).toISOString() });
+  closeSticky(String(id || ''));
+  notifyReminderWindows();
+  return updated;
+});
+ipcMain.handle('reminder-dismiss', (_event, id) => {
+  const updated = spine.updateReminder(String(id || ''), { status: 'hidden' });
+  closeSticky(String(id || ''));
+  notifyReminderWindows();
+  return updated;
+});
+ipcMain.handle('reminder-delete', (_event, id) => {
+  closeSticky(String(id || ''));
+  const deleted = spine.deleteItem('reminders', String(id || ''));
+  notifyReminderWindows();
+  return deleted;
+});
+ipcMain.handle('work-guard-get', () => spine.workGuard());
+ipcMain.handle('work-guard-set', (_event, settings) => {
+  const guard = spine.setWorkGuard(settings || {});
+  notifyReminderWindows();
+  return guard;
+});
+ipcMain.handle('work-guard-clear', () => {
+  const guard = spine.clearWorkGuard();
+  notifyReminderWindows();
+  return guard;
+});
+
+// ---------------------------------------------------------------------------
+// Explicit computer primitives — no arbitrary commands and no background use.
+// ---------------------------------------------------------------------------
+
+ipcMain.handle('computer-action', async (_event, input) => {
+  const checked = computerPrimitives.validateAction(input);
+  if (!checked.ok) return checked;
+  const action = checked.action;
+  if (
+    process.platform === 'darwin' &&
+    ['press_keys', 'type_text'].includes(action.action) &&
+    !systemPreferences.isTrustedAccessibilityClient(false)
+  ) {
+    return { ok: false, error: `macOS has not given ${spine.duckName()} Accessibility access yet — use “Give it hands” in the menu bar first.` };
+  }
+  if (computerPrimitives.needsConfirmation(action)) {
+    const answer = await dialog.showMessageBox({
+      type: 'warning',
+      title: `${spine.duckName()} is about to use the keyboard`,
+      message: computerPrimitives.describeAction(action),
+      detail: 'This happens once in the app that was frontmost when you asked.',
+      buttons: ['Cancel', 'Do it'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+    if (answer.response !== 1) return { ok: false, cancelled: true, error: 'cancelled' };
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  const result = await computerPrimitives.runAction(action);
+  logEvent('computer-primitive', { action: action.action, ok: result.ok });
+  return result;
+});
+
+// ---------------------------------------------------------------------------
+// Codex + Claude Code — one-click hook merge, local loopback events only.
+// ---------------------------------------------------------------------------
+
+let integrationsWin = null;
+
+function integrationOptions() {
+  return { homeDir: app.getPath('home'), userDataDir: app.getPath('userData') };
+}
+
+function openIntegrationsWindow() {
+  if (integrationsWin) {
+    integrationsWin.focus();
+    return;
+  }
+  integrationsWin = new BrowserWindow({
+    width: 650,
+    height: 560,
+    minWidth: 560,
+    minHeight: 450,
+    title: 'Coding buddy connections',
+    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+  });
+  integrationsWin.loadFile(path.join(__dirname, 'renderer', 'integrations.html'));
+  integrationsWin.on('closed', () => { integrationsWin = null; });
+}
+
+ipcMain.handle('integration-status', () =>
+  ['codex', 'claude'].map((kind) => integrations.integrationStatus(kind, integrationOptions()))
+);
+ipcMain.handle('integration-install', (_event, kind) => {
+  if (!['codex', 'claude'].includes(kind)) return { error: 'unknown integration' };
+  try {
+    const result = integrations.installIntegration(kind, integrationOptions());
+    logEvent('integration-installed', { kind });
+    return result;
+  } catch (error) {
+    logEvent('integration-install-failed', { kind });
+    return { kind, installed: false, error: error.message };
+  }
+});
+ipcMain.handle('integration-remove', (_event, kind) => {
+  if (!['codex', 'claude'].includes(kind)) return { error: 'unknown integration' };
+  try {
+    const result = integrations.removeIntegration(kind, integrationOptions());
+    logEvent('integration-removed', { kind });
+    return result;
+  } catch (error) {
+    return { kind, installed: false, error: error.message };
+  }
 });
 
 // ---------------------------------------------------------------------------

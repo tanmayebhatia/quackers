@@ -3,11 +3,11 @@
   "fresh": true,
   "seed": {
     "hatch": true,
-    "userName": "Tanmaye",
+    "userName": "Alex",
     "sessions": 6,
     "facts": [
-      { "statement": "His name is Tanmaye", "category": "person", "importance": 10 },
-      { "statement": "He loves quick competitive games", "category": "taste", "importance": 7 }
+      { "statement": "The person's name is Alex", "category": "person", "importance": 10 },
+      { "statement": "Alex loves quick competitive games", "category": "taste", "importance": 7 }
     ]
   },
   "steps": [

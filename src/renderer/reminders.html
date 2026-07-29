@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Sticky notes</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #faf5e8; --card: #fff9e7; --ink: #433c31; --muted: #827766; --line: #e4d8b8; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#25221c; --card:#332e24; --ink:#f0e9d8; --muted:#aba08d; --line:#504836; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; background: var(--bg); color: var(--ink); font: 14px/1.4 -apple-system, sans-serif; }
+    h1 { margin: 0; font: 750 21px/1.2 ui-rounded, -apple-system, sans-serif; }
+    .sub { margin: 4px 0 20px; color: var(--muted); }
+    section { background: var(--card); border: 1px solid var(--line); border-radius: 15px; padding: 16px; margin: 14px 0; }
+    h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+    textarea, input, select {
+      border: 1px solid var(--line); border-radius: 9px; background: var(--bg); color: var(--ink);
+      padding: 8px 10px; font: inherit;
+    }
+    textarea { width: 100%; min-height: 70px; resize: vertical; }
+    .row { display: flex; gap: 9px; align-items: center; margin-top: 9px; }
+    .row input[type="datetime-local"] { flex: 1; }
+    button { border: 0; border-radius: 999px; background: #e9bf3f; color: #443710; padding: 8px 13px; font-weight: 700; cursor: pointer; }
+    button.secondary { background: transparent; color: var(--muted); padding: 4px 5px; }
+    button.danger { color: #c35f56; }
+    .guard-copy { flex: 1; }
+    .guard-copy b { display: block; }
+    .guard-copy small { color: var(--muted); }
+    #guard-message { flex: 1; }
+    #guard-minutes { width: 76px; }
+    .note { display: flex; align-items: center; gap: 11px; padding: 10px 2px; border-top: 1px solid var(--line); }
+    .note:first-child { border-top: 0; }
+    .swatch { width: 13px; height: 13px; border-radius: 50%; background: #f4cd53; flex: 0 0 auto; }
+    .swatch.rose { background:#ecaaa7; } .swatch.mint { background:#9ed19c; } .swatch.sky { background:#9bcce7; } .swatch.lilac { background:#c7a9dd; }
+    .note-copy { flex: 1; min-width: 0; }
+    .note-copy div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .note-copy small { color: var(--muted); }
+    .empty { color: var(--muted); font-style: italic; padding: 8px 2px; }
+    .status { min-height: 18px; margin-top: 6px; color: #598364; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>🐤 Sticky notes</h1>
+  <p class="sub">Little physical interruptions you asked for. They stay local and survive restarts.</p>
+  <section>
+    <h2>Leave one</h2>
+    <textarea id="note-text" maxlength="500" placeholder="stand up. water. the bug is probably the cache."></textarea>
+    <div class="row">
+      <input id="note-due" type="datetime-local" aria-label="When" />
+      <select id="note-color" aria-label="Color"><option value="butter">butter</option><option value="rose">rose</option><option value="mint">mint</option><option value="sky">sky</option><option value="lilac">lilac</option></select>
+      <button id="create">stick it</button>
+    </div>
+    <div class="status" id="create-status"></div>
+  </section>
+  <section>
+    <h2>Work-too-long guard</h2>
+    <div class="row">
+      <div class="guard-copy"><b id="guard-title">Off</b><small>Only nudges while you’re active; never during Focus or a call.</small></div>
+      <input id="guard-minutes" type="number" min="20" max="180" value="60" aria-label="Minutes" />
+      <span>min</span>
+    </div>
+    <div class="row"><input id="guard-message" maxlength="240" placeholder="optional note in Quackers' voice" /><button id="guard-toggle">turn on</button></div>
+  </section>
+  <section>
+    <h2>On the desk</h2>
+    <div id="notes"></div>
+  </section>
+  <script src="reminders.js"></script>
+</body>
+</html>

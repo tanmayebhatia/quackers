@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Quackers' scrapbook</title>
+  <style>
+    :root { color-scheme: light; --ink: #433b2e; --cream: #fffaf0; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, sans-serif;
+      background:
+        radial-gradient(circle at 12px 12px, rgba(80,45,18,.08) 1px, transparent 1.4px) 0 0 / 24px 24px,
+        linear-gradient(135deg, #b7814e, #9c683e);
+    }
+    header {
+      position: sticky; top: 0; z-index: 4;
+      display: flex; align-items: center; gap: 14px;
+      padding: 18px 24px;
+      background: rgba(255,250,240,.94);
+      border-bottom: 1px solid rgba(73,53,31,.16);
+      backdrop-filter: blur(14px);
+    }
+    .duck { font-size: 31px; filter: drop-shadow(0 2px 0 #e6bd55); }
+    h1 { margin: 0; font: 700 20px/1.1 ui-rounded, -apple-system, sans-serif; }
+    .sub { margin: 3px 0 0; color: #80725f; font-size: 12.5px; }
+    .spacer { flex: 1; }
+    .add {
+      border: 0; border-radius: 999px; padding: 9px 14px;
+      background: #f1c84b; color: #4c3b13; font-weight: 700; cursor: pointer;
+      box-shadow: 0 3px 0 #c79b24;
+    }
+    .composer {
+      display: none; margin: 18px 24px 0; padding: 15px;
+      background: #fff8d9; border-radius: 4px;
+      box-shadow: 0 8px 20px rgba(62,32,9,.22);
+      transform: rotate(-.25deg);
+    }
+    .composer.open { display: grid; grid-template-columns: 1fr auto; gap: 9px; }
+    .composer input, .composer textarea {
+      width: 100%; border: 1px solid #dacb91; border-radius: 7px; padding: 8px 10px;
+      background: rgba(255,255,255,.66); color: inherit; font: inherit;
+    }
+    .composer textarea { grid-column: 1 / -1; min-height: 68px; resize: vertical; }
+    .composer button { align-self: start; border: 0; border-radius: 7px; background: #4e8b69; color: white; padding: 9px 14px; font-weight: 650; cursor: pointer; }
+    #board {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+      align-items: start; gap: 22px; padding: 28px 26px 50px;
+    }
+    .card {
+      --paper: #fff2ad;
+      position: relative; min-height: 165px; padding: 25px 17px 15px;
+      background: var(--paper);
+      box-shadow: 0 7px 14px rgba(51,27,10,.24), inset 0 0 22px rgba(255,255,255,.22);
+      transform: rotate(var(--tilt));
+      transition: transform .16s ease, box-shadow .16s ease;
+    }
+    .card:nth-child(3n+1) { --tilt: -1.2deg; }
+    .card:nth-child(3n+2) { --tilt: .8deg; }
+    .card:nth-child(3n) { --tilt: -.35deg; }
+    .card:hover { transform: rotate(0) translateY(-3px); box-shadow: 0 11px 22px rgba(51,27,10,.3); }
+    .card[data-color="rose"] { --paper: #ffd9d8; }
+    .card[data-color="mint"] { --paper: #d7f0d5; }
+    .card[data-color="sky"] { --paper: #d8ebf8; }
+    .card[data-color="lilac"] { --paper: #e8ddf4; }
+    .tack {
+      position: absolute; top: 8px; left: 50%; width: 12px; height: 12px;
+      margin-left: -6px; border-radius: 50%; background: #d44e45;
+      box-shadow: 0 2px 2px rgba(45,20,10,.35), inset -2px -2px 2px rgba(70,0,0,.18);
+    }
+    .kind { color: rgba(61,50,34,.55); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; font-weight: 750; }
+    .card h2 { margin: 5px 0 8px; font: 750 16px/1.25 ui-rounded, -apple-system, sans-serif; }
+    .card p { margin: 0 0 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .date { color: rgba(61,50,34,.55); font-size: 11px; }
+    .actions { display: flex; gap: 9px; margin-top: 10px; opacity: .65; }
+    .actions button { border: 0; padding: 0; background: transparent; color: inherit; font: 12px/1.2 inherit; cursor: pointer; }
+    .actions button:hover { text-decoration: underline; }
+    .empty {
+      grid-column: 1 / -1; margin: 40px auto; max-width: 340px; padding: 30px;
+      text-align: center; background: rgba(255,250,240,.88); border-radius: 18px;
+      box-shadow: 0 10px 28px rgba(51,27,10,.22);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="duck">🐤</div>
+    <div><h1>Our scrapbook</h1><p class="sub">Tiny things worth keeping. All local on this Mac.</p></div>
+    <div class="spacer"></div>
+    <button class="add" id="toggle-add">+ pin a moment</button>
+  </header>
+  <form class="composer" id="composer">
+    <input id="title" maxlength="100" placeholder="give this moment a tiny title" />
+    <button type="submit">keep it</button>
+    <textarea id="body" maxlength="800" placeholder="what happened?"></textarea>
+  </form>
+  <main id="board"></main>
+  <script src="scrapbook.js"></script>
+</body>
+</html>

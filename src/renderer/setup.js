@@ -1,4 +1,4 @@
-// "Give Quackers a voice" — saves the user's OpenAI key to local app data.
+// "Give Quackers a voice" — saves the API key through macOS secure storage.
 
 const input = document.getElementById('key');
 const button = document.getElementById('save');

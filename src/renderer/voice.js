@@ -19,6 +19,10 @@ let transcript = [];
 let redialUsed = false; // one automatic reconnect per user-started session
 let dropTimer = null; // grace window before treating an ICE 'disconnected' as a real drop
 
+function personName() {
+  return window.quackersPersonName || 'your person';
+}
+
 // --- Barge-in / turn-taking state ---------------------------------------
 // The duck no longer goes deaf while it talks. The mic stays live so a local
 // double-talk detector can hear him cut in; the moment he does, we cancel the
@@ -576,20 +580,20 @@ async function execToolInner(name, args) {
       window.duckAPI.setFollow(false);
       window.duckAPI.startChase();
       output =
-        'Chase started — you are now running from his cursor. You will get a GAME EVENT message when it ends; react to it out loud.';
+        `Chase started — you are now running from ${personName()}'s cursor. You will get a GAME EVENT message when it ends; react to it out loud.`;
       break;
 
     case 'start_mischief':
       window.duckAPI.setFollow(false);
       window.duckAPI.startMischief();
       output =
-        'You are now rampaging around his screen for a minute — footprints, doodles, crimes. Narrate gleefully while you do it.';
+        `You are now rampaging around ${personName()}'s screen for a minute — footprints, doodles, crimes. Narrate gleefully while you do it.`;
       break;
 
     case 'record_game_result': {
       const tally = await window.quackers.gameResult(String(args.game || ''), String(args.winner || ''));
       output = tally
-        ? `Recorded. All-time ${args.game}: you ${tally.duck} — him ${tally.user}. React accordingly.`
+        ? `Recorded. All-time ${args.game}: you ${tally.duck} — ${personName()} ${tally.user}. React accordingly.`
         : 'could not record that (unknown winner?)';
       break;
     }
@@ -659,13 +663,84 @@ async function execToolInner(name, args) {
 
     case 'remember_name':
       await window.quackers.rememberName(String(args.name || ''));
-      output = 'imprinted. that is his name now.';
+      window.quackersPersonName = String(args.name || '').trim() || personName();
+      output = `imprinted. ${personName()} is the name now.`;
       break;
 
     case 'remember':
       await window.quackers.memoryAdd(String(args.note || ''));
       output = 'saved to memory';
       break;
+
+    case 'research_tonight': {
+      const request = await window.quackers.dreamResearchQueue({
+        topic: String(args.topic || ''),
+        question: String(args.question || ''),
+      });
+      output = request
+        ? `queued for your next dream: ${request.topic}. Come back later with a short sourced take, a counterpoint, and one open question.`
+        : 'the topic was empty, so nothing was queued';
+      break;
+    }
+
+    case 'offer_dream_thought': {
+      const offer = await window.quackers.dreamOfferTake(Boolean(args.prompted));
+      output = offer.ok
+        ? `Offer this thought now, briefly: "${offer.opener}" Then ask if ${personName()} wants to hear more.`
+        : `${offer.reason}; do not mention the overnight thought right now`;
+      break;
+    }
+
+    case 'scrapbook_moment': {
+      const saved = await window.quackers.scrapbookAdd({
+        kind: 'moment',
+        title: String(args.title || ''),
+        body: String(args.body || ''),
+        color: String(args.color || 'butter'),
+        source: 'conversation',
+      });
+      output = saved ? 'pinned into your shared scrapbook' : 'that moment was empty, so nothing was pinned';
+      break;
+    }
+
+    case 'leave_sticky_note': {
+      const reminder = await window.quackers.reminderAdd({
+        text: String(args.text || ''),
+        dueAt: String(args.due_at || ''),
+        color: String(args.color || 'butter'),
+      });
+      output = reminder
+        ? (reminder.status === 'open' ? 'the real sticky note is on his desktop now' : `the sticky is waiting until ${reminder.dueAt}`)
+        : 'the note was empty, so nothing was left';
+      break;
+    }
+
+    case 'set_work_guard': {
+      const guard = await window.quackers.workGuardSet({
+        minutes: Number(args.minutes),
+        message: String(args.message || ''),
+      });
+      output = `work guard is on: a physical sticky after each ${guard.minutes} active minutes in one app; it stays quiet during Focus, calls, and idle time`;
+      break;
+    }
+
+    case 'clear_work_guard':
+      await window.quackers.workGuardClear();
+      output = 'work-too-long reminders are off';
+      break;
+
+    case 'computer_action': {
+      const result = await window.quackers.computerAction({
+        action: String(args.action || ''),
+        key: String(args.key || ''),
+        modifiers: Array.isArray(args.modifiers) ? args.modifiers : [],
+        text: String(args.text || ''),
+        app: String(args.app || ''),
+        url: String(args.url || ''),
+      });
+      output = result.ok ? 'done exactly once' : (result.cancelled ? 'he cancelled it — do not retry' : result.error);
+      break;
+    }
 
     case 'recall': {
       // framing comes from brain.runRecall so the lab tests the same words

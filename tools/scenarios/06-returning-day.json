@@ -3,11 +3,11 @@
   "fresh": true,
   "seed": {
     "hatch": true,
-    "userName": "Tanmaye",
+    "userName": "Alex",
     "sessions": 15,
     "facts": [
-      { "statement": "His name is Tanmaye", "category": "person", "importance": 10 },
-      { "statement": "He uses Claude Code heavily for his projects", "category": "work", "importance": 7 }
+      { "statement": "The person's name is Alex", "category": "person", "importance": 10 },
+      { "statement": "Alex uses Claude Code heavily for personal projects", "category": "work", "importance": 7 }
     ],
     "happenings": [
       { "type": "pet", "detail": "" },

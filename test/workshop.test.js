@@ -67,10 +67,16 @@ test('validateCode blocks escape hatches and broken syntax', () => {
     'localStorage.setItem("a", 1)',
     'import("x")',
     'document.cookie',
+    'while (true) stage.say("nope")',
+    'for (;;) {}',
+    'setInterval(() => stage.say("forever"), 1)',
+    'requestAnimationFrame(() => {})',
+    'new SharedArrayBuffer(1024)',
     'stage.onTap(() => {', // syntax error
   ]) {
     assert.equal(workshop.validateCode(bad).ok, false, `should reject: ${bad}`);
   }
+  assert.equal(workshop.validateCode(`// ${'x'.repeat(20001)}`).ok, false);
 });
 
 test('validatePropSpec enforces anchor, bounds, size, hex colors', () => {

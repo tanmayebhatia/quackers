@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Quackers sticky</title>
+  <style>
+    :root { color-scheme: light; --paper: #fff1a8; --ink: #3f392d; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+    body {
+      position: relative;
+      color: var(--ink); font: 14px/1.35 -apple-system, sans-serif;
+      background: var(--paper);
+      border: 1px solid rgba(95,72,17,.18);
+      box-shadow: inset 0 0 35px rgba(255,255,255,.3);
+      transform-origin: 50% 8%;
+      animation: stick-land 420ms cubic-bezier(.2,1.35,.35,1) both;
+    }
+    body::before {
+      content: ""; position: absolute; z-index: 3; top: -2px; left: 50%;
+      width: 74px; height: 22px; margin-left: -37px;
+      background: rgba(244,229,185,.78); border: 1px solid rgba(114,91,38,.09);
+      transform: rotate(-1.5deg); pointer-events: none;
+    }
+    body[data-color="rose"] { --paper: #ffd7d5; }
+    body[data-color="mint"] { --paper: #d5f0d3; }
+    body[data-color="sky"] { --paper: #d8edf9; }
+    body[data-color="lilac"] { --paper: #e9dcf5; }
+    .drag {
+      height: 36px; display: flex; align-items: center; padding: 5px 9px;
+      -webkit-app-region: drag; cursor: grab;
+    }
+    .duck { font-size: 20px; transform: rotate(-8deg); }
+    .label { margin-left: 5px; font-size: 10px; opacity: .54; letter-spacing: .08em; text-transform: uppercase; }
+    .close { margin-left: auto; -webkit-app-region: no-drag; border: 0; background: transparent; color: inherit; opacity: .55; cursor: pointer; font-size: 18px; }
+    main { height: calc(100% - 36px); display: flex; flex-direction: column; padding: 4px 18px 15px; }
+    .text { flex: 1; display: grid; place-items: center; width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; text-align: center; font: 650 20px/1.35 ui-rounded, -apple-system, sans-serif; }
+    .due { min-height: 18px; text-align: center; font-size: 11px; opacity: .58; }
+    .actions { display: flex; justify-content: center; gap: 7px; padding-top: 8px; animation: controls-in 220ms ease 260ms both; }
+    button.action { border: 1px solid rgba(55,45,23,.17); border-radius: 999px; background: rgba(255,255,255,.42); color: inherit; padding: 6px 10px; cursor: pointer; font-weight: 650; }
+    button.action:hover { background: rgba(255,255,255,.68); }
+    @keyframes stick-land {
+      0% { opacity: 0; transform: translateY(-22px) scale(.78) rotate(-4deg); }
+      64% { opacity: 1; transform: translateY(3px) scale(1.035) rotate(1deg); }
+      100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+    }
+    @keyframes controls-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      body, .actions { animation-duration: 1ms; animation-delay: 0ms; }
+    }
+  </style>
+</head>
+<body>
+  <div class="drag"><span class="duck">🐤</span><span class="label">a note from Quackers</span><button class="close" id="dismiss" aria-label="Put away">×</button></div>
+  <main>
+    <div class="text" id="text"></div>
+    <div class="due" id="due"></div>
+    <div class="actions"><button class="action" id="snooze">later</button><button class="action" id="done">done ✓</button></div>
+  </main>
+  <script src="sticky.js"></script>
+</body>
+</html>

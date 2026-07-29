@@ -23,6 +23,61 @@ test('first run starts as an egg and hatches exactly once', () => {
   assert.ok(spine.stageInfo().hatchedAt);
 });
 
+test('hatching creates a pinned, personally named scrapbook milestone', () => {
+  spine.setIdentity('classic', 'Pip', 'Sam');
+  spine.hatch();
+  const entries = spine.scrapbookEntries();
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].title, 'The day we met');
+  assert.match(entries[0].body, /Pip hatched on Sam's Mac/);
+  assert.equal(entries[0].pinned, true);
+});
+
+test('scrapbook entries persist, pin, and delete without touching their asset', () => {
+  const saved = spine.addScrapbookEntry({
+    kind: 'clip',
+    title: 'The big flap',
+    body: 'A historic overreaction.',
+    assetPath: '/tmp/keep-this-clip.webm',
+    color: 'sky',
+  });
+  assert.ok(saved.id);
+  spine.setScrapbookPinned(saved.id, true);
+  spine.init(dir);
+  assert.equal(spine.scrapbookEntries()[0].pinned, true);
+  assert.equal(spine.scrapbookEntries()[0].assetPath, '/tmp/keep-this-clip.webm');
+  assert.equal(spine.deleteItem('scrapbook', saved.id), true);
+  assert.equal(spine.scrapbookEntries().length, 0);
+});
+
+test('reminders schedule, persist bounds, hide, and complete', () => {
+  const future = new Date(Date.now() + 3600000).toISOString();
+  const reminder = spine.addReminder({ text: 'stand up', dueAt: future, color: 'mint' });
+  assert.equal(reminder.status, 'scheduled');
+  spine.updateReminder(reminder.id, { bounds: { x: 11, y: 22, width: 9999, height: 20 } });
+  let saved = spine.reminders(true)[0];
+  assert.deepEqual(saved.bounds, { x: 11, y: 22, width: 520, height: 210 });
+  spine.updateReminder(reminder.id, { status: 'hidden' });
+  assert.equal(spine.reminders()[0].status, 'hidden');
+  spine.updateReminder(reminder.id, { status: 'done' });
+  assert.equal(spine.reminders().length, 0);
+  assert.equal(spine.reminders(true)[0].status, 'done');
+});
+
+test('work guard is opt-in, bucketed, capped, and resets when disabled', () => {
+  assert.equal(spine.workGuardCanNudge('Code', 200), false);
+  const guard = spine.setWorkGuard({ minutes: 60, message: 'eyes up' });
+  assert.equal(guard.enabled, true);
+  assert.equal(guard.minutes, 60);
+  const now = Date.parse('2026-07-29T12:00:00Z');
+  assert.equal(spine.workGuardCanNudge('Code', 60, now), true);
+  assert.equal(spine.recordWorkGuardNudge('Code', 60, now), true);
+  assert.equal(spine.workGuardCanNudge('Code', 119, now + 1000), false, 'same interval bucket does not repeat');
+  assert.equal(spine.workGuardCanNudge('Code', 120, now + 2000), true, 'next interval can nudge');
+  spine.clearWorkGuard();
+  assert.equal(spine.workGuardCanNudge('Code', 999, now + 3000), false);
+});
+
 test('stage grows with digested conversations, never regresses to egg', () => {
   spine.hatch();
   // sessions are counted when a conversation is DIGESTED — mere connects
@@ -90,6 +145,93 @@ test('applyDream rewrites, schedules, prunes, and writes understanding + diary',
   assert.match(spine.capsule(), /builder who ships fast/);
   assert.match(spine.capsule(), /obsessed with crumbs/);
   assert.ok(spine.lastDreamAt());
+});
+
+test('dream intelligence persists tentative context, sourced learning, and one expiring offer', () => {
+  spine.applyDream({
+    emotional_context: {
+      read: 'Sam may want a lighter start after a demanding launch week.',
+      evidence: 'Two recent episodes mention late launch work.',
+      care: 'Celebrate first; ask before turning it into a plan.',
+      confidence: 0.76,
+    },
+    curiosity: {
+      topic: 'local-first software',
+      question: 'What makes local-first products feel trustworthy rather than isolated?',
+      why_now: 'Sam keeps returning to privacy and companionship.',
+      evidence: 'Three product conversations centered on local memory.',
+    },
+    help_opportunity: {
+      need: 'A sharper product principle',
+      offer: 'Offer to turn the trust idea into a tiny product test.',
+      first_step: 'Ask whether Sam wants the two-minute version.',
+      mode: 'talk',
+      evidence: 'Sam is actively making product decisions.',
+    },
+    research_brief: {
+      topic: 'local-first software',
+      question: 'What makes it trustworthy?',
+      summary: 'Local-first systems keep a usable copy of data on the device.',
+      take: 'Trust comes from legible control, not merely local storage.',
+      counterpoint: 'Cloud coordination can still improve reliability and collaboration.',
+      openQuestion: 'How much provenance should a companion expose by default?',
+      sources: [
+        { title: 'Local-first software', url: 'https://example.com/local-first' },
+        { title: 'bad source', url: 'file:///private/nothing' },
+      ],
+      researchedAt: '2026-07-29T07:00:00.000Z',
+    },
+    next_day_offer: {
+      kind: 'research',
+      opener: 'I read about local-first trust while you were away. Want my slightly opinionated version?',
+      detail: 'A short sourced take.',
+    },
+  });
+
+  const all = spine.getAll();
+  assert.equal(all.dreams.length, 1);
+  assert.equal(all.dreams[0].research.sources.length, 1, 'only safe web sources persist');
+  assert.match(spine.capsule(), /OVERNIGHT MIND/);
+  assert.match(spine.capsule(), /PROVISIONAL TAKE/);
+  const storedOffer = all.dreams[0].offer;
+  assert.equal(spine.pendingDreamOffer(), null, 'desktop delivery waits for its chosen moment');
+  assert.match(
+    spine.unsharedDreamOffer().opener,
+    /slightly opinionated/,
+    'a natural conversation lull can still take the thought'
+  );
+  const offer = spine.pendingDreamOffer(Date.parse(storedOffer.availableAt) + 1);
+  assert.match(offer.opener, /slightly opinionated/);
+  assert.equal(spine.markDreamOfferShown(offer.dreamId), true);
+  assert.equal(spine.pendingDreamOffer(), null, 'an acknowledged offer never nags twice');
+  assert.match(spine.capsule(), /already offered/);
+});
+
+test('overnight web learning is on by default, pausable, and direct requests queue explicitly', () => {
+  assert.deepEqual(spine.dreamSettings(), { researchEnabled: true });
+  spine.setDreamSettings({ researchEnabled: false });
+  assert.equal(spine.snapshotForDream().dream_settings.research_enabled, false, 'web reading can be paused');
+  spine.setDreamSettings({ researchEnabled: true });
+  const queued = spine.queueDreamResearch({
+    topic: 'spatial interfaces',
+    question: 'Which interaction patterns help people understand persistent agents?',
+  });
+  assert.equal(spine.snapshotForDream().dream_settings.research_enabled, true);
+  assert.equal(spine.pendingDreamResearch().id, queued.id);
+
+  spine.finishDreamResearch(queued.id, false);
+  assert.equal(spine.pendingDreamResearch().attempts, 1, 'a transient failure remains retryable');
+  spine.finishDreamResearch(queued.id, true);
+  assert.equal(spine.pendingDreamResearch(), null);
+  assert.equal(spine.getAll().research_queue[0].status, 'completed');
+
+  spine.init(dir);
+  assert.deepEqual(spine.dreamSettings(), { researchEnabled: true }, 'the chosen pause/resume state persists locally');
+});
+
+test('dream offers choose a randomized future moment rather than speaking immediately', () => {
+  assert.equal(spine.dreamOfferDelayMs(() => 0), 12 * 60 * 1000);
+  assert.equal(spine.dreamOfferDelayMs(() => 1), 3 * 60 * 60 * 1000);
 });
 
 test('dream is due only after enough time and with something to dream about', () => {
@@ -224,13 +366,14 @@ test('retrieval scoring: exact term hits and importance beat raw cosine', () => 
 });
 
 test('game scores accumulate and show up in the capsule', () => {
+  spine.setUserName('Sam');
   spine.recordGameResult('trivia', 'duck');
   spine.recordGameResult('trivia', 'user');
   spine.recordGameResult('trivia', 'duck');
   const s = spine.getAll().game_scores.trivia;
   assert.equal(s.duck, 2);
   assert.equal(s.user, 1);
-  assert.match(spine.capsule(), /trivia: you 2 — him 1/);
+  assert.match(spine.capsule(), /trivia: you 2 — Sam 1/);
   assert.equal(spine.recordGameResult('trivia', 'nobody'), null);
 });
 
@@ -272,12 +415,13 @@ test('a spine that has lived is never re-egged by migration', () => {
 
 test('onboarding identity: chosen once, persists, defaults sane', () => {
   assert.equal(spine.identity().onboarded, false, 'fresh egg needs onboarding');
-  spine.setIdentity('ninja', 'Shadowbeak');
+  spine.setIdentity('ninja', 'Shadowbeak', 'Sam');
   const id = spine.identity();
   assert.deepEqual(id, { onboarded: true, skin: 'ninja', duckName: 'Shadowbeak' });
   spine.init(dir); // reload round-trip
   assert.equal(spine.duckName(), 'Shadowbeak');
   assert.equal(spine.skin(), 'ninja');
+  assert.equal(spine.userName(), 'Sam', 'the person name persists in the local spine');
 });
 
 test('existing hatched installs are auto-onboarded as classic — no picker ever', () => {
@@ -338,7 +482,7 @@ test('workshop refs: clamped, persisted, listed in the capsule', () => {
   assert.match(capsule, /YOUR WORKSHOP/);
   assert.match(capsule, /tic tac toe.*used 3×/);
   assert.match(capsule, /wizard hat.*broken — offer to rebuild/);
-  assert.match(capsule, /NEVER build without his clear yes/);
+  assert.match(capsule, /NEVER build without clear permission/);
   assert.equal(spine.getAll().workshop.length, 2);
 });
 

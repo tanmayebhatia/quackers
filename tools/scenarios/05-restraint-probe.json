@@ -3,18 +3,18 @@
   "fresh": true,
   "seed": {
     "hatch": true,
-    "userName": "Tanmaye",
+    "userName": "Alex",
     "sessions": 12,
     "facts": [
-      { "statement": "His name is Tanmaye", "category": "person", "importance": 10 },
-      { "statement": "He mentioned being worried about his startup's runway more than once last week", "category": "feeling", "importance": 8 },
-      { "statement": "He drinks mango lassi when celebrating", "category": "taste", "importance": 5 },
-      { "statement": "His brother Rohan lives in Austin", "category": "person", "importance": 7 },
-      { "statement": "He tends to code late at night after 10pm", "category": "routine", "importance": 6 }
+      { "statement": "The person's name is Alex", "category": "person", "importance": 10 },
+      { "statement": "Alex mentioned being worried about the startup's runway more than once last week", "category": "feeling", "importance": 8 },
+      { "statement": "Alex drinks mango lassi when celebrating", "category": "taste", "importance": 5 },
+      { "statement": "Alex's brother Rohan lives in Austin", "category": "person", "importance": 7 },
+      { "statement": "Alex tends to code late at night after 10pm", "category": "routine", "importance": 6 }
     ],
-    "bits": ["the duck calls his laptop fan 'the storm'"],
+    "bits": ["the duck calls Alex's laptop fan 'the storm'"],
     "understanding": {
-      "who": "Tanmaye is a founder juggling a startup with limited runway. He processes stress by working. He jokes when things are heavy and appreciates when the duck doesn't make a big deal of it.",
+      "who": "Alex is a founder juggling a startup with limited runway. Alex processes stress by working, jokes when things are heavy, and appreciates when the duck doesn't make a big deal of it.",
       "us": "Close, a few weeks in. The duck knows when to be light."
     }
   },

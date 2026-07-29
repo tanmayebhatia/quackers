@@ -3,16 +3,16 @@
   "fresh": true,
   "seed": {
     "hatch": true,
-    "userName": "Tanmaye",
+    "userName": "Alex",
     "sessions": 6,
     "facts": [
-      { "statement": "His name is Tanmaye", "category": "person", "importance": 10 },
-      { "statement": "He works in venture capital and also builds side projects", "category": "work", "importance": 8 },
-      { "statement": "He is building a fund-data upload and ingest pipeline at work", "category": "work", "importance": 7 }
+      { "statement": "The person's name is Alex", "category": "person", "importance": 10 },
+      { "statement": "Alex works in venture capital and also builds side projects", "category": "work", "importance": 8 },
+      { "statement": "Alex is building a fund-data upload and ingest pipeline at work", "category": "work", "importance": 7 }
     ],
     "understanding": {
-      "who": "Tanmaye works in venture capital and builds software on the side. He's currently deep in a fund-data ingest pipeline project. He likes talking through problems out loud and prefers a sharp sounding board over cheerleading.",
-      "us": "A week in. He talks to the duck between work sessions. He pets it a lot."
+      "who": "Alex works in venture capital and builds software on the side. Alex is currently deep in a fund-data ingest pipeline project. Alex likes talking through problems out loud and prefers a sharp sounding board over cheerleading.",
+      "us": "A week in. Alex talks to the duck between work sessions and pets it a lot."
     }
   },
   "steps": [

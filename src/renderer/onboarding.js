@@ -4,7 +4,9 @@ const { SKINS, SKIN_ORDER, drawSkinPreview } = window.QUACKERS_SKINS;
 
 let selected = 'classic';
 const grid = document.getElementById('grid');
-const nameInput = document.getElementById('name');
+const duckNameInput = document.getElementById('duck-name');
+const personNameInput = document.getElementById('person-name');
+const goButton = document.getElementById('go');
 
 const PXS = 4; // preview pixel size
 const PREVIEW_W = 14 * PXS + 8;
@@ -36,21 +38,32 @@ for (const id of SKIN_ORDER) {
   card.addEventListener('click', () => {
     selected = id;
     document.querySelectorAll('.card').forEach((c) => c.classList.toggle('selected', c.dataset.skin === id));
-    nameInput.focus();
+    duckNameInput.focus();
   });
   grid.appendChild(card);
 }
 
 function confirm() {
-  const name = nameInput.value.trim() || 'Quackers';
-  window.quackers.onboardComplete(selected, name);
+  const duckName = duckNameInput.value.trim() || 'Quackers';
+  const personName = personNameInput.value.trim();
+  if (!personName) {
+    personNameInput.focus();
+    return;
+  }
+  window.quackers.onboardComplete(selected, duckName, personName);
 }
 
-document.getElementById('go').addEventListener('click', confirm);
+function updateReady() {
+  goButton.disabled = !personNameInput.value.trim();
+}
+
+goButton.addEventListener('click', confirm);
+personNameInput.addEventListener('input', updateReady);
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') confirm();
   // arrow keys walk the grid
-  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && document.activeElement !== nameInput) {
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) &&
+      ![duckNameInput, personNameInput].includes(document.activeElement)) {
     e.preventDefault();
     const i = SKIN_ORDER.indexOf(selected);
     const cols = 4;
@@ -60,5 +73,6 @@ window.addEventListener('keydown', (e) => {
     document.querySelectorAll('.card').forEach((c) => c.classList.toggle('selected', c.dataset.skin === selected));
   }
 });
-nameInput.focus();
-nameInput.select();
+duckNameInput.focus();
+duckNameInput.select();
+updateReady();

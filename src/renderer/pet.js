@@ -149,7 +149,8 @@ function setDockOffset(offset) {
 
 const GROUNDED_STATES = [
   'idle', 'wander', 'approach', 'peck', 'preen', 'look', 'sleep',
-  'goToCrumb', 'eatCrumb', 'looking', 'trip', 'hatching',
+  'goToCrumb', 'eatCrumb', 'looking', 'trip', 'hatching', 'building',
+  'sticky', 'presenting',
 ];
 
 function updateDockLift(dt) {
@@ -200,6 +201,7 @@ function dropEgg() {
 // after the pick-your-quacker window: the chosen egg drops
 window.quackers.onEggDrop(async () => {
   const info = await window.quackers.stageGet();
+  window.quackersPersonName = info.userName || 'your person';
   applySkin(info.skin);
   if (info.stage === 'egg') dropEgg();
 });
@@ -209,6 +211,7 @@ window.quackers.onEggDrop(async () => {
 (async () => {
   try {
     const [info, hasKey] = await Promise.all([window.quackers.stageGet(), window.quackers.keyStatus()]);
+    window.quackersPersonName = info.userName || 'your person';
     egg.hasVoice = !!hasKey;
     setDockOffset(info.groundOffset);
     applySkin(info.skin);
@@ -285,12 +288,31 @@ const trick = { watching: false, performing: false, tx: 0, ty: 0, arrived: false
 
 // the workshop build is pure theater: the model is generating code while the
 // body hammers/paints/types — latency converted into character
-const build = { kind: null, quipIn: 0, sparkIn: 0 };
+const build = { kind: null, name: '', side: 1, quipIn: 0, sparkIn: 0 };
 const BUILD_QUIPS = {
   game: ['*hammering*', 'the corners keep escaping', 'almost… steady…', '*measures twice, cuts thrice*'],
   viz: ['*squints artistically*', 'needs more orange', '*steps back to consider*'],
   writing: ['*tap tap tap*', 'no. crumple. again.', '*chews the pencil*'],
   prop: ['*snip snip*', 'does this go on the front?', '*tries it on backwards*'],
+};
+const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const stickyDelivery = {
+  active: false,
+  id: null,
+  text: '',
+  color: 'butter',
+  side: 1,
+  frame: null,
+  lastPhase: null,
+  readySent: false,
+};
+const presentation = { targetX: 0, name: '' };
+const NOTE_COLORS = {
+  butter: '#fff1a8',
+  rose: '#ffd7d5',
+  mint: '#d5f0d3',
+  sky: '#d8edf9',
+  lilac: '#e9dcf5',
 };
 let propLayers = []; // equipped workshop props, drawn like skin accessories
 const marks = []; // {type:'footprint'|'doodle', t, ...} drawn under the duck, fade out
@@ -500,6 +522,19 @@ function settle() {
   duck.rock = 0;
   duck.squashY = 0.92;
   duck.squashX = 1.05;
+}
+
+function finishStickyPerformance() {
+  if (!stickyDelivery.active || stickyDelivery.readySent) return;
+  stickyDelivery.readySent = true;
+  const id = stickyDelivery.id;
+  stickyDelivery.active = false;
+  spawnParticle('spark', Math.min(W - 150, duck.x + 90), Math.max(70, H * 0.18));
+  duck.state = 'preen';
+  duck.stateT = 0;
+  duck.stateDur = 1.6;
+  duck.happyT = 1.4;
+  window.quackers.stickyDeliveryReady(id);
 }
 
 function update(dt) {
@@ -775,13 +810,48 @@ function update(dt) {
       }
       break;
     }
+    case 'sticky': {
+      stickyDelivery.frame = window.QUACKERS_CHOREOGRAPHY.stickyFrame(duck.stateT, reducedMotion);
+      const phase = stickyDelivery.frame.phase;
+      if (phase !== stickyDelivery.lastPhase) {
+        stickyDelivery.lastPhase = phase;
+        if (phase === 'write') {
+          duck.squashY = 0.9;
+          spawnParticle('spark', duck.x + 34, duck.y - 48);
+        } else if (phase === 'carry') {
+          duck.happyT = 1;
+          duck.squashY = 0.86;
+        } else if (phase === 'stick') {
+          for (let i = 0; i < 4; i++) {
+            spawnParticle('spark', Math.min(W - 150, duck.x + 90) + (Math.random() - 0.5) * 28, Math.max(70, H * 0.18));
+          }
+        }
+      }
+      if (phase === 'fetch') {
+        duck.faceDir = Math.sin(duck.stateT * 10) > 0 ? 1 : -1;
+        duck.rock = Math.sin(duck.stateT * 16) * 0.12;
+        duck.squashY = 0.94;
+      } else if (phase === 'write') {
+        duck.faceDir = 1;
+        duck.rock = 0.08 + Math.sin(duck.stateT * 17) * 0.035;
+      } else if (phase === 'carry') {
+        duck.faceDir = 1;
+        duck.rock = Math.sin(duck.stateT * 13) * 0.08;
+        duck.squashY = 0.95 + Math.sin(duck.stateT * 13) * 0.025;
+      } else if (phase === 'stick') {
+        duck.faceDir = 1;
+        duck.rock = -0.07 * (1 - stickyDelivery.frame.progress);
+      }
+      if (stickyDelivery.frame.done) finishStickyPerformance();
+      break;
+    }
     case 'building': {
-      duck.faceDir = 1;
+      duck.faceDir = build.side;
       const tempo = build.kind === 'game' ? 14 : build.kind === 'viz' ? 5 : 9;
-      duck.rock = Math.sin(duck.stateT * tempo) * (build.kind === 'viz' ? 0.08 : 0.22);
+      duck.rock = build.side * Math.sin(duck.stateT * tempo) * (build.kind === 'viz' ? 0.08 : 0.22);
       build.sparkIn -= dt;
       if (build.sparkIn <= 0) {
-        spawnParticle(build.kind === 'viz' ? 'note' : 'spark', duck.x + 26, duck.y - 14);
+        spawnParticle(build.kind === 'viz' ? 'note' : 'spark', duck.x + build.side * 38, duck.y - 24);
         build.sparkIn = build.kind === 'game' ? 0.3 : 0.7;
       }
       build.quipIn -= dt;
@@ -789,6 +859,18 @@ function update(dt) {
         const quips = BUILD_QUIPS[build.kind] || BUILD_QUIPS.game;
         say(quips[Math.floor(Math.random() * quips.length)]);
         build.quipIn = 6 + Math.random() * 4;
+      }
+      break;
+    }
+    case 'presenting': {
+      duck.faceDir = Math.sign(presentation.targetX - duck.x) || 1;
+      duck.rock = duck.faceDir * (-0.08 + Math.sin(duck.stateT * 7) * 0.025);
+      duck.happyT = 1;
+      if (duck.stateT < 0.25) duck.squashY = 0.86;
+      if (duck.stateT > (reducedMotion ? 0.35 : 1.55)) {
+        duck.state = 'preen';
+        duck.stateT = 0;
+        duck.stateDur = 1.4;
       }
       break;
     }
@@ -1147,11 +1229,215 @@ function drawFeet() {
 function currentEyes() {
   if (duck.state === 'looking') return 'wide';
   if (duck.state === 'follow') return 'wide'; // locked onto the cursor, attentive
+  if (duck.state === 'sticky' || duck.state === 'presenting') return 'happy';
   if (duck.state === 'sleep') return 'sleep';
   if (yawnT > 0) return 'sleep'; // eyes squeeze shut mid-yawn
   if (duck.happyT > 0) return 'happy';
   if (duck.blinkT > 0) return 'blink';
   return 'open';
+}
+
+function drawBuildTheater() {
+  if (duck.state !== 'building') return;
+  const side = build.side || 1;
+  const cx = duck.x + side * 88;
+  const top = duck.y - 58;
+  ctx.save();
+  ctx.globalAlpha = duck.alpha;
+
+  // A tiny workbench turns model latency into a legible activity.
+  ctx.fillStyle = '#8b5a32';
+  ctx.fillRect(cx - 49, top + 48, 98, 8);
+  ctx.fillStyle = '#604021';
+  ctx.fillRect(cx - 40, top + 56, 8, 32);
+  ctx.fillRect(cx + 31, top + 56, 8, 32);
+  ctx.fillStyle = '#fff6d6';
+  ctx.fillRect(cx - 39, top + 3, 78, 46);
+  ctx.strokeStyle = '#c9b77d';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(cx - 39, top + 3, 78, 46);
+
+  const reveal = Math.min(1, duck.stateT / 2.2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(cx - 36, top + 6, 72 * reveal, 40);
+  ctx.clip();
+  if (build.kind === 'game') {
+    ctx.strokeStyle = '#6d85b7';
+    ctx.lineWidth = 2;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx + i * 15, top + 9);
+      ctx.lineTo(cx + i * 15, top + 43);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - 30, top + 26 + i * 11);
+      ctx.lineTo(cx + 30, top + 26 + i * 11);
+      ctx.stroke();
+    }
+  } else if (build.kind === 'viz') {
+    ctx.fillStyle = '#ee8e59';
+    ctx.fillRect(cx - 28, top + 27, 12, 15);
+    ctx.fillStyle = '#6db7a5';
+    ctx.fillRect(cx - 8, top + 18, 12, 24);
+    ctx.fillStyle = '#8f7fd6';
+    ctx.fillRect(cx + 12, top + 11, 12, 31);
+  } else if (build.kind === 'writing') {
+    ctx.strokeStyle = '#7b715f';
+    ctx.lineWidth = 2;
+    for (let row = 0; row < 4; row++) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 29, top + 14 + row * 8);
+      ctx.lineTo(cx + (row === 3 ? 9 : 29), top + 14 + row * 8);
+      ctx.stroke();
+    }
+  } else {
+    ctx.strokeStyle = '#d07c4e';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - 25, top + 36);
+    ctx.quadraticCurveTo(cx, top + 6, cx + 25, top + 36);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // The tool itself moves differently by craft.
+  ctx.save();
+  ctx.translate(cx - side * 42, top + 12);
+  ctx.rotate(side * Math.sin(duck.stateT * (build.kind === 'game' ? 14 : 8)) * 0.42);
+  if (build.kind === 'game' || build.kind === 'prop') {
+    ctx.fillStyle = '#77543a';
+    ctx.fillRect(-2, 0, 4, 38);
+    ctx.fillStyle = '#66717b';
+    ctx.fillRect(-12, -4, 24, 9);
+  } else {
+    ctx.strokeStyle = build.kind === 'viz' ? '#d5744f' : '#e2b13f';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, 38);
+    ctx.stroke();
+    ctx.fillStyle = '#3f392d';
+    ctx.beginPath();
+    ctx.moveTo(-3, 39);
+    ctx.lineTo(3, 39);
+    ctx.lineTo(0, 46);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.restore();
+}
+
+function wrappedNoteLines(text, maxWidth, maxLines) {
+  const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(candidate).width > maxWidth) {
+      lines.push(line);
+      line = word;
+      if (lines.length === maxLines) break;
+    } else {
+      line = candidate;
+    }
+  }
+  if (line && lines.length < maxLines) lines.push(line);
+  if (lines.length === maxLines && words.join(' ').length > lines.join(' ').length) {
+    lines[maxLines - 1] = `${lines[maxLines - 1].slice(0, -1)}…`;
+  }
+  return lines;
+}
+
+function drawStickyTheater() {
+  if (!stickyDelivery.active || !stickyDelivery.frame) return;
+  const frame = stickyDelivery.frame;
+  const w = 156;
+  const h = 108;
+  const side = stickyDelivery.side || 1;
+  const startX = duck.x + side * 42 - w / 2;
+  const startY = duck.y - DUCK_H - 4;
+  const targetX = W - w - 46;
+  const targetY = Math.max(56, Math.min(H * 0.18, H - h - 180));
+  let x = startX;
+  let y = startY;
+  let scale = 1;
+  let rotation = side * -0.035;
+  if (frame.phase === 'fetch') {
+    scale = 0.18 + frame.progress * 0.82;
+    rotation = side * (0.24 * (1 - frame.progress) - 0.035);
+  } else if (frame.phase === 'carry') {
+    y -= Math.sin(frame.progress * Math.PI) * 18;
+    rotation = Math.sin(frame.progress * Math.PI * 2) * 0.04;
+  } else if (frame.phase === 'stick') {
+    x += (targetX - startX) * frame.progress;
+    y += (targetY - startY) * frame.progress;
+    rotation *= 1 - frame.progress;
+    scale = 1 - frame.progress * 0.03;
+  }
+
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate(rotation);
+  ctx.scale(scale, scale);
+  ctx.shadowColor = 'rgba(48,31,12,.24)';
+  ctx.shadowBlur = 9;
+  ctx.shadowOffsetY = 5;
+  ctx.fillStyle = NOTE_COLORS[stickyDelivery.color] || NOTE_COLORS.butter;
+  ctx.fillRect(-w / 2, -h / 2, w, h);
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(82,65,34,.18)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-w / 2, -h / 2, w, h);
+
+  if (frame.phase === 'stick') {
+    ctx.globalAlpha = frame.progress;
+    ctx.fillStyle = 'rgba(244,229,185,.82)';
+    ctx.fillRect(-29, -h / 2 - 6, 58, 16);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.fillStyle = '#4a4337';
+  ctx.font = '600 13px ui-rounded, -apple-system, sans-serif';
+  const visible = stickyDelivery.text.slice(0, Math.ceil(stickyDelivery.text.length * frame.writeProgress));
+  const lines = wrappedNoteLines(visible, w - 28, 4);
+  lines.forEach((line, index) => ctx.fillText(line, -w / 2 + 14, -h / 2 + 28 + index * 18));
+
+  if (frame.phase === 'write') {
+    const pulse = Math.sin(duck.stateT * 18) * 3;
+    ctx.strokeStyle = '#d49c2d';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - 22, h / 2 - 16 + pulse);
+    ctx.lineTo(w / 2 + 7, h / 2 + 10 + pulse);
+    ctx.stroke();
+    ctx.fillStyle = '#b55245';
+    ctx.beginPath();
+    ctx.moveTo(w / 2 + 7, h / 2 + 10 + pulse);
+    ctx.lineTo(w / 2 + 12, h / 2 + 16 + pulse);
+    ctx.lineTo(w / 2 + 3, h / 2 + 13 + pulse);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawPresentationGesture() {
+  if (duck.state !== 'presenting') return;
+  const dir = Math.sign(presentation.targetX - duck.x) || 1;
+  ctx.save();
+  ctx.globalAlpha = duck.alpha;
+  ctx.translate(duck.x + dir * 22, duck.y - 38);
+  ctx.scale(dir, 1);
+  ctx.fillStyle = SKIN_COLORS.D;
+  ctx.beginPath();
+  ctx.ellipse(12, 0, 20, 7, -0.22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffd66e';
+  ctx.font = '14px -apple-system, sans-serif';
+  ctx.fillText('✦', 29, -9);
+  ctx.restore();
 }
 
 function drawDuck() {
@@ -1392,7 +1678,7 @@ function drawVoiceDot() {
 
 window.duckAPI = {
   startChase() {
-    if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'trickmove', 'building'].includes(duck.state) || egg.mode) return;
+    if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'trickmove', 'building', 'sticky', 'presenting'].includes(duck.state) || egg.mode) return;
     mischief.active = false;
     chaseStartAt = performance.now();
     fleeJump = null;
@@ -1403,7 +1689,7 @@ window.duckAPI = {
     say('catch me if you can!');
   },
   startMischief() {
-    if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'trickmove', 'building'].includes(duck.state) || egg.mode) return;
+    if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'trickmove', 'building', 'sticky', 'presenting'].includes(duck.state) || egg.mode) return;
     // self-heal: if a previous rampage was interrupted mid-flight (state moved
     // on without the falling cleanup), don't let the stale flag wedge the feature
     if (mischief.active && duck.state !== 'mischief') mischief.active = false;
@@ -1442,7 +1728,7 @@ window.duckAPI = {
     beginHatch();
   },
   startLooking() {
-    if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'trickmove', 'building'].includes(duck.state) || egg.mode) return;
+    if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'trickmove', 'building', 'sticky', 'presenting'].includes(duck.state) || egg.mode) return;
     duck.state = 'looking';
     duck.stateT = 0;
     duck.rock = 0;
@@ -1455,7 +1741,7 @@ window.duckAPI = {
     if (duck.state === 'looking') plan();
   },
   emote(name) {
-    if (['dragged', 'poof', 'hidden', 'flee', 'goToCrumb', 'eatCrumb', 'hatching', 'mischief', 'trickmove', 'building'].includes(duck.state) || egg.mode) return;
+    if (['dragged', 'poof', 'hidden', 'flee', 'goToCrumb', 'eatCrumb', 'hatching', 'mischief', 'trickmove', 'building', 'sticky', 'presenting'].includes(duck.state) || egg.mode) return;
     // model emote-flurries would look like a seizure — the body sets its own pace
     const nowT = performance.now();
     if (this._lastEmoteAt && nowT - this._lastEmoteAt < 1200) return;
@@ -1536,6 +1822,18 @@ window.duckAPI = {
       duck.faceDir = 0;
     }
   },
+  presentStage(name, targetX) {
+    if (stickyDelivery.active) finishStickyPerformance();
+    presentation.name = String(name || '').slice(0, 60);
+    presentation.targetX = Number(targetX) || duck.x + 120;
+    duck.state = 'presenting';
+    duck.stateT = 0;
+    duck.bubble = null;
+    duck.happyT = 1.6;
+    for (let i = 0; i < 4; i++) {
+      spawnParticle('spark', duck.x + (Math.random() - 0.5) * 35, duck.y - DUCK_H * (0.35 + Math.random() * 0.45));
+    }
+  },
   sayBubble(text) {
     say(text);
   },
@@ -1550,6 +1848,7 @@ window.duckAPI = {
 
 window.quackers.onDismiss(() => {
   if (duck.state === 'poof' || duck.state === 'hidden') return;
+  if (stickyDelivery.active) finishStickyPerformance();
   duck.state = 'poof';
   duck.stateT = 0;
   duck.bubble = null;
@@ -1560,13 +1859,13 @@ window.quackers.onDismiss(() => {
 
 // proactive moments — bubble-only, pre-governed in the main process
 window.quackers.onImpulse((data) => {
-  if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'mischief', 'looking', 'trickmove', 'building'].includes(duck.state)) return;
+  if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'mischief', 'looking', 'trickmove', 'building', 'sticky', 'presenting'].includes(duck.state)) return;
   if (voiceState !== 'idle') return; // never interrupt a conversation
   if (egg.mode) return; // eggs don't do small talk
   // confirm delivery so the main process charges the daily budget only for
   // impulses that were actually shown
-  if (['welcome', 'loop-due', 'loop', 'stretch', 'battery', 'latenight'].includes(data.kind)) {
-    window.quackers.impulseShown(data.kind);
+  if (['welcome', 'loop-due', 'loop', 'stretch', 'battery', 'latenight', 'dream'].includes(data.kind)) {
+    window.quackers.impulseShown(data.kind, data.dreamId || null);
   }
   if (data.kind === 'welcome') {
     duck.state = 'jump';
@@ -1613,12 +1912,22 @@ window.quackers.onImpulse((data) => {
     duck.bubbleT = 7;
     yawnT = 1.1;
     duck.squashY = 0.93;
+  } else if (data.kind === 'dream' && data.text) {
+    duck.state = 'preen';
+    duck.stateT = 0;
+    duck.stateDur = 2.4;
+    duck.happyT = 2;
+    for (let i = 0; i < 4; i++) {
+      spawnParticle('spark', duck.x + 12 + Math.random() * 20, duck.y - 18 - Math.random() * 24);
+    }
+    say(String(data.text).slice(0, 240));
+    duck.bubbleT = 9;
   }
 });
 
 // coding-buddy events (Claude Code hooks, CI scripts) — the duck cares
 window.quackers.onBuddy((data) => {
-  if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'mischief', 'looking', 'trickmove', 'building'].includes(duck.state) || egg.mode) return;
+  if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'mischief', 'looking', 'trickmove', 'building', 'sticky', 'presenting'].includes(duck.state) || egg.mode) return;
   if (voiceState !== 'idle') {
     // mid-conversation: feed it into the talk instead of bubbling over it
     if (window.reportAmbientEvent) window.reportAmbientEvent(`CODING EVENT: ${data.type}${data.detail ? ` — ${data.detail}` : ''}`);
@@ -1662,12 +1971,14 @@ window.quackers.onBuddy((data) => {
 window.quackers.onDnd((on) => {
   quietMode = !!on;
   if (quietMode && duck.bubble) duck.bubble = null;
+  if (quietMode && stickyDelivery.active) finishStickyPerformance();
 });
 
 // he's on a call: freeze the antics, sit like a very good duck
 window.quackers.onCall((on) => {
   callMode = !!on;
   if (callMode) {
+    if (stickyDelivery.active) finishStickyPerformance();
     duck.bubble = null;
     if (!egg.mode && voiceState === 'idle' && ['wander', 'approach', 'hop', 'peck', 'look'].includes(duck.state)) {
       duck.state = 'idle';
@@ -1757,13 +2068,43 @@ window.quackers.onTrick((data) => {
   }
 });
 
+// A reminder is delivered as one physical sentence: fetch paper, write it,
+// carry it up, press it into place. Main waits for this ack before creating the
+// real always-on-top sticky window, with a timeout fallback for reliability.
+window.quackers.onStickyDelivery((data) => {
+  const id = String(data && data.id || '');
+  if (!id) return;
+  const busy = ['dragged', 'flee', 'hatching', 'mischief', 'looking', 'trickmove', 'building'];
+  if (egg.mode || quietMode || callMode || busy.includes(duck.state)) {
+    window.quackers.stickyDeliveryReady(id);
+    return;
+  }
+  stickyDelivery.active = true;
+  stickyDelivery.id = id;
+  stickyDelivery.text = String(data.text || '').slice(0, 500);
+  stickyDelivery.color = NOTE_COLORS[data.color] ? data.color : 'butter';
+  stickyDelivery.side = duck.x > W - 250 ? -1 : 1;
+  stickyDelivery.frame = window.QUACKERS_CHOREOGRAPHY.stickyFrame(0, reducedMotion);
+  stickyDelivery.lastPhase = null;
+  stickyDelivery.readySent = false;
+  mischief.active = false;
+  duck.state = 'sticky';
+  duck.stateT = 0;
+  duck.bubble = null;
+  duck.crumb = null;
+  duck.faceDir = stickyDelivery.side;
+});
+
 // workshop phases: the build performance, the ta-da, the charming failure
 window.quackers.onWorkshop((data) => {
   if (egg.mode) return;
   if (data.phase === 'building') {
+    if (stickyDelivery.active) finishStickyPerformance();
     if (['dragged', 'poof', 'hidden', 'flee', 'hatching', 'trickmove'].includes(duck.state)) return;
     mischief.active = false;
     build.kind = data.kind || 'game';
+    build.name = String(data.name || '').slice(0, 60);
+    build.side = duck.x > W - 250 ? -1 : 1;
     build.quipIn = 1.5;
     build.sparkIn = 0.3;
     duck.state = 'building';
@@ -1773,9 +2114,10 @@ window.quackers.onWorkshop((data) => {
   } else if (data.phase === 'done') {
     if (duck.state !== 'building') return;
     spawnConfettiBurst(duck.x, duck.y - DUCK_H / 2);
-    duck.state = 'preen';
+    duck.state = 'presenting';
     duck.stateT = 0;
-    duck.stateDur = 2;
+    presentation.name = String(data.name || build.name || '').slice(0, 60);
+    presentation.targetX = duck.x + build.side * 180;
     say('ta-da!');
   } else if (data.phase === 'fail') {
     if (duck.state !== 'building') return;
@@ -1806,12 +2148,14 @@ window.quackers.onDreaming((on) => {
     duck.zIn = 0.4;
   }
 });
-window.quackers.onDreamed(() => {
+window.quackers.onDreamed((data) => {
   if (voiceState !== 'idle' || egg.mode) return;
   duck.state = 'preen';
   duck.stateT = 0;
   duck.stateDur = 2;
-  say('*sorted my thoughts*');
+  // When the dream prepared a real thought, let that thought be the reveal.
+  // A generic "sorted my thoughts" bubble seconds beforehand only adds noise.
+  if (!data.hasOffer) say('*sorted my thoughts*');
 });
 
 // the voice arrives (key was just saved)
@@ -1906,6 +2250,7 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('mousedown', (e) => {
   if (!overDuck(e.clientX, e.clientY)) return;
+  if (duck.state === 'sticky') return; // let the four-second delivery land cleanly
   if (duck.state === 'flee') {
     endChase(true); // gotcha
     return;
@@ -2015,7 +2360,10 @@ function frame(now) {
   drawMarks();
   drawCrumbs();
   drawShadow();
+  drawBuildTheater();
   drawDuck();
+  drawStickyTheater();
+  drawPresentationGesture();
   drawVoiceDot();
   drawWatchDot();
   drawThinkingDots();

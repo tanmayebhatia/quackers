@@ -9,6 +9,81 @@
   let smoke = null; // { frame, token, timer, ready }
   const BOARD_W = 340;
   const BOARD_H = 280;
+  const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function ensureStageStyles() {
+    if (document.getElementById('quackers-stage-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'quackers-stage-styles';
+    style.textContent = `
+      .q-stage-shell {
+        position: fixed;
+        width: ${BOARD_W}px;
+        height: ${BOARD_H}px;
+        z-index: 5;
+        pointer-events: none;
+        box-sizing: content-box;
+        border: 6px solid #8a5b35;
+        border-radius: 13px;
+        background: #fff8dd;
+        box-shadow: 0 18px 36px rgba(48, 28, 10, .28), inset 0 0 0 2px rgba(255,255,255,.45);
+        opacity: 0;
+        transform: translateY(54px) scale(.72) rotate(-5deg);
+        transform-origin: 12% 100%;
+        transition: transform 620ms cubic-bezier(.2,1.35,.35,1), opacity 180ms ease;
+      }
+      .q-stage-shell.shown { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+      .q-stage-shell.closing {
+        opacity: 0;
+        transform: translateY(28px) scale(.86) rotate(2deg);
+        transition: transform 260ms cubic-bezier(.4,0,1,1), opacity 200ms ease;
+      }
+      .q-stage-label {
+        position: absolute;
+        top: -31px;
+        left: 12px;
+        max-width: 250px;
+        padding: 5px 11px 6px;
+        overflow: hidden;
+        color: #4b3b29;
+        background: #f6d768;
+        border: 2px solid #8a5b35;
+        border-radius: 8px 8px 3px 3px;
+        font: 700 12px/1.1 ui-rounded, -apple-system, sans-serif;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        box-shadow: 0 4px 8px rgba(48,28,10,.16);
+      }
+      .q-stage-nail {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #d6b157;
+        box-shadow: inset -2px -2px 1px rgba(80,49,10,.22);
+        z-index: 2;
+      }
+      .q-stage-nail.a { left: 7px; top: 7px; }
+      .q-stage-nail.b { right: 7px; top: 7px; }
+      .q-stage-canvas {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        opacity: 0;
+        transform: scale(.97);
+        transition: opacity 180ms ease 260ms, transform 260ms ease 240ms;
+      }
+      .q-stage-shell.shown .q-stage-canvas { opacity: 1; transform: scale(1); }
+      @media (prefers-reduced-motion: reduce) {
+        .q-stage-shell, .q-stage-shell.closing, .q-stage-canvas {
+          transition-duration: 1ms !important;
+          transition-delay: 0ms !important;
+          transform: none !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
   function srcdocFor(code, state) {
     const escScript = (s) => String(s).replace(/<\/script/gi, '<\\/script');
@@ -38,20 +113,46 @@
   }
 
   function open({ id, name, code, state }) {
-    close();
+    close(true);
+    ensureStageStyles();
     const pos = window.duckAPI && window.duckAPI.pos ? window.duckAPI.pos() : { x: innerWidth / 2, ground: innerHeight - 90 };
     const left = Math.round(Math.max(8, Math.min(innerWidth - BOARD_W - 8, pos.x + 50)));
     const top = Math.round(Math.max(8, pos.ground - BOARD_H - 6));
     const frame = makeIframe(code, state);
-    frame.style.left = left + 'px';
-    frame.style.top = top + 'px';
-    current = { id, name, frame, left, top };
+    const shell = document.createElement('div');
+    shell.className = 'q-stage-shell';
+    shell.style.left = left + 'px';
+    shell.style.top = top + 'px';
+    const label = document.createElement('div');
+    label.className = 'q-stage-label';
+    label.textContent = String(name || 'from the workshop');
+    const nailA = document.createElement('span');
+    nailA.className = 'q-stage-nail a';
+    const nailB = document.createElement('span');
+    nailB.className = 'q-stage-nail b';
+    frame.classList.add('q-stage-canvas');
+    shell.append(label, nailA, nailB, frame);
+    document.body.appendChild(shell);
+    current = { id, name, frame, shell, left, top };
+    requestAnimationFrame(() => {
+      if (current && current.shell === shell) shell.classList.add('shown');
+    });
+    if (window.duckAPI && window.duckAPI.presentStage) {
+      window.duckAPI.presentStage(name, left + BOARD_W / 2);
+    }
   }
 
-  function close() {
+  function close(immediate = false) {
     if (!current) return;
-    current.frame.remove();
+    const closing = current;
     current = null;
+    if (immediate || reducedMotion || !closing.shell) {
+      (closing.shell || closing.frame).remove();
+      return;
+    }
+    closing.shell.classList.remove('shown');
+    closing.shell.classList.add('closing');
+    setTimeout(() => closing.shell.remove(), 300);
   }
 
   function overStage(x, y) {
@@ -68,7 +169,7 @@
     const tally = await window.quackers.gameResult(current.name, winner);
     if (window.reportGameEvent) {
       window.reportGameEvent(
-        `stage game "${current.name}": ${winner === 'duck' ? 'YOU won' : 'HE won'}. All-time: you ${tally ? tally.duck : '?'} — him ${tally ? tally.user : '?'}. React out loud (the score is already recorded — do not record it again).`
+        `stage game "${current.name}": ${winner === 'duck' ? 'YOU won' : `${window.quackersPersonName || 'your person'} won`}. All-time: you ${tally ? tally.duck : '?'} — ${window.quackersPersonName || 'your person'} ${tally ? tally.user : '?'}. React out loud (the score is already recorded — do not record it again).`
       );
     }
   }

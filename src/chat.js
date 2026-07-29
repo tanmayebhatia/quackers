@@ -19,7 +19,20 @@ const CHAT_MODEL = 'gpt-5.5';
 // or workshop (those need a live body loop), and no think_hard (in text, the
 // chat model already IS the deep mind). look_at_screen/app are resolved in main;
 // emote animates the on-screen body while he texts.
-const CHAT_TOOL_NAMES = ['emote', 'recall', 'remember', 'remember_name', 'look_at_screen', 'look_at_app'];
+const CHAT_TOOL_NAMES = [
+  'emote',
+  'recall',
+  'remember',
+  'remember_name',
+  'research_tonight',
+  'offer_dream_thought',
+  'look_at_screen',
+  'look_at_app',
+  'scrapbook_moment',
+  'leave_sticky_note',
+  'set_work_guard',
+  'clear_work_guard',
+];
 
 const CHAT_ONLY_TOOLS = [
   {
@@ -44,9 +57,21 @@ const CHAT_ONLY_TOOLS = [
 
 // realtime tools are { type, name, description, parameters }; chat/completions
 // wants { type, function: { name, description, parameters } }. Convert + filter.
-const CHAT_TOOLS = brain.REALTIME_TOOLS.filter((t) => CHAT_TOOL_NAMES.includes(t.name))
-  .map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }))
-  .concat(CHAT_ONLY_TOOLS);
+function buildChatTools(personName) {
+  const shared = brain.buildRealtimeTools(personName)
+    .filter((t) => CHAT_TOOL_NAMES.includes(t.name))
+    .map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
+  const chatOnly = CHAT_ONLY_TOOLS.map((tool) => ({
+    ...tool,
+    function: {
+      ...tool.function,
+      description: brain.personalizeStaticPrompt(tool.function.description, personName),
+    },
+  }));
+  return shared.concat(chatOnly);
+}
+
+const CHAT_TOOLS = buildChatTools();
 
 const CHAT_MODE_OVERRIDE = `YOU ARE NOW IN TEXT CHAT MODE — this overrides "HOW YOU SOUND" and the "DELIVERY CONTRACT" above; everything about WHO YOU ARE still holds completely.
 You're texting him, the way a close friend texts — quick, warm, alive. Not typing a document, not narrating.
@@ -59,7 +84,10 @@ You're texting him, the way a close friend texts — quick, warm, alive. Not typ
 - Everything durable you learn still goes to memory, exactly as when you talk. This is the same you, same friendship — just typed.`;
 
 function buildChatInstructions({ spine, ambientLine = '', now = new Date() }) {
-  return `${brain.buildInstructions({ spine, ambientLine, now })}\n\n${CHAT_MODE_OVERRIDE}`;
+  return `${brain.buildInstructions({ spine, ambientLine, now })}\n\n${brain.personalizeStaticPrompt(
+    CHAT_MODE_OVERRIDE,
+    spine.userName()
+  )}`;
 }
 
 // Parse a chat/completions Server-Sent Events stream: fire onDelta for each
@@ -117,7 +145,7 @@ async function consumeStream(res, onDelta, log) {
 // One model turn. `messages` is the running chat array (system + user/assistant/
 // tool). Streams text via onDelta; returns the assembled { text, toolCalls } so
 // the caller can run any tools and, if there were tools, call again.
-async function runChatTurn({ apiKey, messages, onDelta = () => {}, log = () => {} }) {
+async function runChatTurn({ apiKey, messages, personName, onDelta = () => {}, log = () => {} }) {
   if (!apiKey) return { text: null, toolCalls: [] };
   try {
     const res = await brain.fetchWithTimeout(
@@ -129,7 +157,7 @@ async function runChatTurn({ apiKey, messages, onDelta = () => {}, log = () => {
           model: CHAT_MODEL,
           stream: true,
           messages,
-          tools: CHAT_TOOLS,
+          tools: buildChatTools(personName),
           tool_choice: 'auto',
         }),
       },
@@ -150,6 +178,7 @@ async function runChatTurn({ apiKey, messages, onDelta = () => {}, log = () => {
 module.exports = {
   CHAT_MODEL,
   CHAT_TOOLS,
+  buildChatTools,
   CHAT_TOOL_NAMES,
   buildChatInstructions,
   runChatTurn,

@@ -13,8 +13,13 @@ if [ ! -d "$APP" ]; then
 fi
 
 echo "Building fresh app.asar…"
+# Keep this in lockstep with the package script: the updater must never smuggle
+# local secrets, test fixtures, or developer metadata into the installed app.
 npx electron-packager . Quackers --platform=darwin --arch=arm64 \
-  --app-bundle-id=com.quackers.desktop --out=dist --overwrite >/dev/null
+  --app-bundle-id=com.quackers.desktop --icon=assets/icon.icns \
+  --ignore='^/(\.env(?:\.[^/]*)?|\.git|\.agents|\.github|\.lab|\.codex|\.claude|\.superpowers|dist|node_modules|test|docs|tools|site)(/|$)' \
+  --out=dist --overwrite >/dev/null
+node tools/verify-package.js
 
 echo "Swapping code into the granted bundle (no re-sign)…"
 pkill -9 -f "Quackers.app" 2>/dev/null || true

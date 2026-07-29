@@ -73,12 +73,12 @@ test('consumeStream tolerates malformed tool args without throwing', async () =>
   assert.deepEqual(out.toolCalls[0].args, {}); // degraded to empty, not a crash
 });
 
-test('chat tool set: mental/memory/look/body only — no games, tricks, workshop, or think_hard', () => {
+test('chat tool set includes local keepsakes/reminders but excludes live-body and keyboard actions', () => {
   const names = chat.CHAT_TOOLS.map((t) => t.function.name);
-  for (const t of ['emote', 'recall', 'remember', 'remember_name', 'look_at_screen', 'look_at_app', 'switch_to_voice', 'end_chat']) {
+  for (const t of ['emote', 'recall', 'remember', 'remember_name', 'research_tonight', 'offer_dream_thought', 'look_at_screen', 'look_at_app', 'scrapbook_moment', 'leave_sticky_note', 'set_work_guard', 'clear_work_guard', 'switch_to_voice', 'end_chat']) {
     assert.ok(names.includes(t), `expected chat tool ${t}`);
   }
-  for (const forbidden of ['think_hard', 'start_chase', 'start_mischief', 'build_artifact', 'learn_trick', 'record_game_result']) {
+  for (const forbidden of ['think_hard', 'start_chase', 'start_mischief', 'build_artifact', 'learn_trick', 'record_game_result', 'computer_action']) {
     assert.ok(!names.includes(forbidden), `${forbidden} must not be a chat tool`);
   }
   // every tool must be in chat/completions shape
@@ -94,8 +94,17 @@ test('chat instructions keep the character and append the text-mode override', (
   assert.match(text, /small pixel-art duck/); // the shared character core is present
   assert.match(text, /TEXT CHAT MODE/); // the override is appended
   assert.match(text, /switch_to_voice/); // it tells the duck how to get back to voice
+  assert.match(text, /Sam's computer screen/);
+  assert.ok(!text.includes('Tanmaye'));
   // the override must come AFTER the base so it wins
   assert.ok(text.indexOf('TEXT CHAT MODE') > text.indexOf('small pixel-art duck'));
+});
+
+test('dream prompt uses the locally stored person name', () => {
+  const dream = require('../src/dream').buildDreamSystem('Sam');
+  assert.match(dream, /Sam's computer screen/);
+  assert.match(dream, /portrait of Sam/);
+  assert.ok(!dream.includes('Tanmaye'));
 });
 
 // Minimal spine stub — just what buildInstructions touches.

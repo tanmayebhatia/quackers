@@ -38,6 +38,10 @@ function init(d) {
   syncRefs();
 }
 
+function personName() {
+  return (deps && deps.spine && deps.spine.userName()) || 'your person';
+}
+
 function wdir() {
   return path.join(deps.dir, 'workshop');
 }
@@ -137,7 +141,7 @@ function checkWorkshop(name) {
     return {
       exists: false,
       name: cleanName,
-      framed: `nothing called "${cleanName}" in your workshop yet. If he wants it, OFFER to build it for the two of you — and call build_artifact ONLY after he clearly says yes.`,
+      framed: `nothing called "${cleanName}" in your workshop yet. If ${personName()} wants it, OFFER to build it for the two of you — and call build_artifact ONLY after ${personName()} clearly says yes.`,
     };
   }
   recentChecks.set(norm(a.name), Date.now()); // a fuzzy hit authorizes the real name too
@@ -150,8 +154,8 @@ function checkWorkshop(name) {
     timesUsed: a.timesUsed,
     broken,
     framed: broken
-      ? `you HAVE "${a.name}" (${a.kind}) but it broke last time you built it — offer to rebuild it, and call build_artifact only after his clear yes.`
-      : `you HAVE "${a.name}" (${a.kind}, ${a.timesUsed ? `used ${a.timesUsed}×` : 'never used yet'}). ${a.kind === 'prop' ? 'Call equip_prop to wear it if he wants.' : 'Call run_artifact to open it if he wants.'}`,
+      ? `you HAVE "${a.name}" (${a.kind}) but it broke last time you built it — offer to rebuild it, and call build_artifact only after ${personName()}'s clear yes.`
+      : `you HAVE "${a.name}" (${a.kind}, ${a.timesUsed ? `used ${a.timesUsed}×` : 'never used yet'}). ${a.kind === 'prop' ? `Call equip_prop to wear it if ${personName()} wants.` : `Call run_artifact to open it if ${personName()} wants.`}`,
   };
 }
 
@@ -172,12 +176,12 @@ function runArtifact(name) {
   const a = findArtifact(name);
   if (!a) return `nothing called "${name}" in your workshop — call check_workshop, then offer to build it.`;
   if (a.kind === 'prop') return `"${a.name}" is a prop you wear, not a board thing — call equip_prop instead.`;
-  if (a.status === 'broken') return `"${a.name}" broke last time you built it — offer to rebuild it (build_artifact after his clear yes).`;
+  if (a.status === 'broken') return `"${a.name}" broke last time you built it — offer to rebuild it (build_artifact after ${personName()}'s clear yes).`;
   recordUse(a.id);
   deps.sendToDuck('quackers:stage-open', { id: a.id, name: a.name, code: a.code, state: a.lastState || {} });
   deps.logEvent('workshop-run', { name: a.name, kind: a.kind, timesUsed: a.timesUsed });
   return a.kind === 'game'
-    ? `The stage board is open with "${a.name}" — play together; he taps the board. The board records scores ITSELF: do NOT call record_game_result for stage games. React out loud to what happens.`
+    ? `The stage board is open with "${a.name}" — play together; ${personName()} taps the board. The board records scores ITSELF: do NOT call record_game_result for stage games. React out loud to what happens.`
     : `The stage board is open with "${a.name}". Look at it together and talk about it.`;
 }
 
@@ -228,11 +232,12 @@ function equippedPropLayers() {
 // Defense in depth: the sandbox+CSP already block these, but code that even
 // MENTIONS an escape hatch is wrong code — reject and let the repair round fix it.
 const BANNED =
-  /\b(fetch|XMLHttpRequest|WebSocket|EventSource|eval|require|localStorage|sessionStorage|indexedDB|postMessage|Worker|SharedWorker)\b|\bimport\s*[(\s]|\bnew\s+Function\b|window\s*\.\s*(parent|top|opener|location)|document\s*\.\s*(cookie|write)|<\/script/i;
+  /\b(fetch|XMLHttpRequest|WebSocket|EventSource|eval|require|localStorage|sessionStorage|indexedDB|postMessage|Worker|SharedWorker|WebAssembly|SharedArrayBuffer|Atomics|setInterval|requestAnimationFrame|queueMicrotask)\b|\bimport\s*[(\s]|\bnew\s+Function\b|window\s*\.\s*(parent|top|opener|location)|document\s*\.\s*(cookie|write)|<\/script|\bwhile\s*\(|\bdo\s*\{|\bfor\s*\(\s*;\s*;\s*\)/i;
 
 function validateCode(code) {
   const src = String(code || '');
   if (!src.trim()) return { ok: false, error: 'empty program' };
+  if (src.length > 20000) return { ok: false, error: 'program exceeds the 20 KB limit' };
   const hit = src.match(BANNED);
   if (hit) return { ok: false, error: `forbidden reference: ${hit[0]}` };
   try {
@@ -352,9 +357,9 @@ async function buildOnce({ name, kind, description, existing }) {
 function requestBuild({ name, kind, description } = {}) {
   const cleanName = String(name || '').slice(0, 60).trim();
   const k = KINDS.includes(kind) ? kind : 'game';
-  if (!cleanName) return 'the thing needs a name — ask him what to call it.';
+  if (!cleanName) return `the thing needs a name — ask ${personName()} what to call it.`;
   if (!recentCheck(cleanName)) {
-    return `you haven't checked your workshop for "${cleanName}" yet — call check_workshop first, and only build after he clearly says yes.`;
+    return `you haven't checked your workshop for "${cleanName}" yet — call check_workshop first, and only build after ${personName()} clearly says yes.`;
   }
   if (building) return 'you are already mid-build — one project at a time.';
   if (!deps.loadApiKey()) return "your workshop needs your voice hooked up first (no API key) — mention the little duck in the menu bar, lightly.";
@@ -369,7 +374,7 @@ function requestBuild({ name, kind, description } = {}) {
       if (result.ok) {
         deps.sendToDuck('quackers:workshop', { phase: 'done', kind: k, name: cleanName });
         if (k === 'prop') {
-          tell(`WORKSHOP EVENT: build finished — the ${cleanName} is ready! Show it off in one breath and offer to put it on (equip_prop only if he says yes).`);
+          tell(`WORKSHOP EVENT: build finished — the ${cleanName} is ready! Show it off in one breath and offer to put it on (equip_prop only if ${personName()} says yes).`);
         } else {
           runArtifact(cleanName); // ta-da: the reveal IS the board appearing
           tell(`WORKSHOP EVENT: build finished — "${cleanName}" is ready and OPEN on the stage next to you. Ta-da! ${k === 'game' ? 'Explain how to play in one breath and start — the board records scores itself, never call record_game_result for it.' : 'Show it off in one breath.'}`);
@@ -377,7 +382,7 @@ function requestBuild({ name, kind, description } = {}) {
         deps.logEvent('workshop-build-done', { name: cleanName, kind: k });
       } else {
         deps.sendToDuck('quackers:workshop', { phase: 'fail', kind: k, name: cleanName });
-        tell(`WORKSHOP EVENT: the build failed twice (${String(result.error).slice(0, 80)}). Fail charmingly — the roof fell off, you'll have another go after you sleep — and move on. Never blame him.`);
+        tell(`WORKSHOP EVENT: the build failed twice (${String(result.error).slice(0, 80)}). Fail charmingly — the roof fell off, you'll have another go after you sleep — and move on. Never blame ${personName()}.`);
         deps.logEvent('workshop-build-failed', { name: cleanName, kind: k, error: result.error });
       }
       return result;

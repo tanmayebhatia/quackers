@@ -17,14 +17,15 @@ your cursor is actually on it.
 
 - **macOS.** It leans on macOS-only pieces — the menu-bar duck, permission-free
   `lsappinfo` sensing, System Events for tricks. Apple Silicon or Intel.
-- **Node 18+** and npm, to run from source.
-- An **OpenAI API key** for voice and memory (yours, stored only on your Mac).
+- **Node 22.12+** and npm, to run from source.
+- An **OpenAI API key** for voice and memory (yours, encrypted with macOS
+  secure storage when entered in the app).
   Everything *visual* — the duck, hatching, petting, games, mischief — works
   without one; the key is what gives it a voice and a memory.
 
 ## Run it
 
-Run from source (macOS, Node 18+):
+Run from source (macOS, Node 22.12+):
 
 ```bash
 git clone https://github.com/tanmayebhatia/quackers.git
@@ -35,7 +36,8 @@ npm start
 
 First run only: a small window asks you to **pick your Quacker** — eleven of
 them (classic, ninja, princess, wizard, pirate, astronaut, robot, cowboy,
-vampire, detective, chef) — and name it. Press Enter, and an egg drops onto
+vampire, detective, chef) — then asks for the duck's name and yours. Both names
+stay in the local profile. Press Enter, and an egg drops onto
 your screen. Pet it (click it) and see what happens. The outfit isn't just
 pixels: a ninja duck speaks softly of stealth and honor; a detective duck
 treats every missing crumb as a case.
@@ -46,7 +48,8 @@ Quit from the little duck in your menu bar.
 
 ## Give it a voice
 
-Quackers talks through your own OpenAI API key, stored only on your Mac.
+Quackers talks through your own OpenAI API key, encrypted with Electron's
+macOS secure storage.
 The duck will bring it up itself after hatching — or use the little duck in
 your menu bar → **"Give Quackers a voice…"**, or drop a `.env` at the repo root:
 
@@ -99,8 +102,9 @@ performs a trick you didn't just ask for.
 
 Ask it to play something it doesn't have — tic tac toe, dots and boxes,
 anything tap-sized — and it offers to **build it**: "I can't right now… but I
-could build it for us. Want me to?" Say yes and it heads to a little workbench
-and hammers for a minute; then a crayon board appears next to it and you play.
+could build it for us. Want me to?" Say yes and it heads to a little workbench,
+unrolls the right blueprint, and visibly hammers, draws, or writes the thing;
+then it presents the finished crayon board with a springy little reveal.
 It keeps everything it builds, forever — next time it's "still got our board!"
 Scores live in its memory like every other game.
 
@@ -120,8 +124,20 @@ Quackers has a two-speed mind:
   you, threads to pick up, your running bits, and the all-time scores.
 - **While it sleeps**, a slower model *dreams*: it closes stale threads,
   merges duplicate memories, promotes recurring themes, rewrites its
-  understanding of you, grows the duck's own personality quirks out of your
-  shared history, and writes a diary entry about your day together.
+  understanding of you, and grows the duck's own personality quirks. It also
+  prepares one bounded **overnight mind**: a tentative emotional read, a
+  worthwhile curiosity, one way it might help, and—only when useful—a gentle
+  next-day conversation offer.
+
+While dreaming, Quackers may read current public sources about something it
+knows you care about, returning with a short factual brief, a provisional duck
+opinion, the strongest counterpoint, and something still unresolved. Thinking
+is standing companion permission; it asks **“want my take?”** before turning
+that thought into a conversation. Say **“research this tonight”** to choose the
+next topic. Web reading can be paused from the memory dashboard. Quackers may
+learn general context around serious or emotional subjects, but never
+investigates you, diagnoses you, or puts private identifying details in a
+search query.
 
 Memory manners are hard rules: at most one unprompted callback per
 conversation, observations instead of judgments, and nothing sensitive quoted
@@ -129,8 +145,12 @@ back verbatim. Being remembered is magic; being monitored is creepy.
 
 **Everything is visible and editable**: menu bar → *"What Quackers
 remembers…"* shows every fact (fix or forget any of them), its understanding
-of you, its diary, and the scoreboard. It's all one local JSON file. Nothing
-leaves your machine except inside prompts to the APIs.
+of you, its overnight thoughts and clickable research sources, its diary, and
+the scoreboard. It's all one local JSON file. Nothing leaves your machine
+except inside requests needed for API-powered features. Overnight web learning
+is visible, source-linked, and can be paused at any time.
+The local diagnostic log stores event metadata, not conversation text or model
+answers. See [PRIVACY.md](PRIVACY.md) for the exact boundaries.
 
 ## Ambient sense (no permissions, no peeking)
 
@@ -144,8 +164,34 @@ when Do Not Disturb is on**. Proactive moments are hard-capped at four a day,
 ## Coding buddy
 
 Quackers listens on `127.0.0.1:42990` so your dev tools can poke it — hook it
-to Claude Code and the duck celebrates when your runs finish (and droops when
-tests go red). See [docs/coding-buddy.md](docs/coding-buddy.md).
+to Codex or Claude Code and the duck celebrates when your runs finish (and
+droops when something fails). Connect either one in a click from the menu-bar
+duck → **"Connect coding tools…"**. Existing hook settings are preserved and
+backed up. See [docs/coding-buddy.md](docs/coding-buddy.md).
+
+## Scrapbook, stickies, and tiny hands
+
+Memory is what helps Quackers know you; the **scrapbook** is what the two of
+you decide to keep. It automatically pins true milestones — hatching, diary
+dreams, learned tricks, saved clips — and you can say "scrapbook this" for any
+moment worth keeping. Open the corkboard from the menu-bar duck → **"Our
+scrapbook…"**. It is entirely local.
+
+Ask Quackers to "leave a sticky that says stand up" and it fetches a note,
+scribbles your words onto it, carries it across the screen, and sticks down a
+real movable, always-on-top note on your desktop. Ask for a future time and it
+survives restarts until then. Notes queue politely, and the choreography gets
+out of the way during Focus mode or calls. Each note can be snoozed, finished,
+or put away.
+The same menu has **"Sticky notes & work guard…"**, where you can opt into a
+heads-down timer: after the requested active time in one app, Quackers leaves
+a note. Focus mode, calls, and idle time always pause it.
+
+Quackers can also perform one explicit computer primitive at a time: open an
+app or web link, press a safe key/chord, or type exact text into the frontmost
+app. It cannot run shell commands or turn a vague goal into an action chain.
+Typing, Return/Delete, and Command-key chords require a native macOS
+confirmation; keyboard actions require Accessibility permission.
 
 ## How it's built
 
@@ -162,11 +208,14 @@ no build step. If you want the internals:
 - [x] A creature that exists on your screen
 - [x] Voice conversation + memory spine (bring your own API key)
 - [x] Hatching arc — starts as an egg, imprints on you
-- [x] Dream loop — sleep-time memory consolidation + understanding + diary
+- [x] Dream intelligence — consolidation, emotional context, curiosity, help planning, sourced learning
 - [x] Games with permanent scores, mischief mode, clip-that
 - [x] Tricks — teach it a workflow by demonstration, it performs it live
 - [x] The workshop — it builds little games and props on request
 - [x] Ambient senses (tier-0, permission-free) + capped proactivity
+- [x] Local scrapbook + persistent physical sticky reminders
+- [x] Opt-in work guard + explicit computer primitives
+- [x] One-click Codex and Claude Code hook connections
 - [ ] Growth stages deepening over weeks (fledgling → companion voices)
 - [ ] Friends' ducks visiting your screen
 

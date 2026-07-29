@@ -6,13 +6,16 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test 'test/**/*.test.js'",
-    "package": "electron-packager . Quackers --platform=darwin --arch=arm64 --app-bundle-id=com.quackers.desktop --icon=assets/icon.icns --out=dist --overwrite && codesign --force --deep --sign - dist/Quackers-darwin-arm64/Quackers.app",
+    "package": "electron-packager . Quackers --platform=darwin --arch=arm64 --app-bundle-id=com.quackers.desktop --icon=assets/icon.icns --ignore='^/(\\.env(?:\\.[^/]*)?|\\.git|\\.agents|\\.github|\\.lab|\\.codex|\\.claude|\\.superpowers|dist|node_modules|test|docs|tools|site)(/|$)' --out=dist --overwrite && node tools/verify-package.js && codesign --force --deep --sign - dist/Quackers-darwin-arm64/Quackers.app",
     "update-app": "bash tools/update-app.sh",
     "install-app": "npm run package && rm -rf ~/Applications/Quackers.app && cp -R dist/Quackers-darwin-arm64/Quackers.app ~/Applications/ && open ~/Applications/Quackers.app"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "license": "MIT",
   "devDependencies": {
     "@electron/packager": "^20.0.2",
-    "electron": "^37.0.0"
+    "electron": "^43.2.0"
   }
 }

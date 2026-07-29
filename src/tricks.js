@@ -9,10 +9,11 @@
 // vision model looks at the screen, decides the next action, a tiny osascript
 // actuator executes it (Accessibility permission = "the duck's hands"), and
 // the duck's body flies to every click and pecks it. Risky steps pause for a
-// spoken yes. The user grabbing the mouse aborts instantly — his hands win.
+// a native confirmation. The user grabbing the mouse aborts instantly.
 
-const { screen, desktopCapturer, systemPreferences } = require('electron');
+const { screen, desktopCapturer, systemPreferences, dialog } = require('electron');
 const { execFile } = require('child_process');
+const { validateAction, actionLooksRisky } = require('./trick-safety');
 
 const ACT_MODEL = 'gpt-5.5';
 const MAX_STEPS = 12;
@@ -21,6 +22,10 @@ const FRAME_W = 1344;
 let deps = null; // { spine, loadApiKey, logEvent, sendToDuck }
 function init(d) {
   deps = d;
+}
+
+function personName() {
+  return (deps && deps.spine && deps.spine.userName()) || 'your person';
 }
 
 function hasHands() {
@@ -69,7 +74,7 @@ function startTeaching(name) {
     if (f) teach.frames.push(f.jpegBase64);
   }, 2500);
   deps.logEvent('trick-teach-start', { name: teach.name });
-  return `watching closely now. He should DO the workflow while narrating what he's doing and why. When he says he's done, call finish_trick.`;
+  return `watching closely now. ${personName()} should DO the workflow while narrating what is happening and why. When ${personName()} says the lesson is done, call finish_trick.`;
 }
 
 async function finishTeaching(narration) {
@@ -81,7 +86,7 @@ async function finishTeaching(narration) {
   teach.frames = [];
   deps.sendToDuck('quackers:trick', { phase: 'done' });
 
-  if (frames.length < 2) return { error: 'the lesson was too quick — I barely saw anything. Ask him to teach it again, a bit slower.' };
+  if (frames.length < 2) return { error: `the lesson was too quick — I barely saw anything. Ask ${personName()} to teach it again, a bit slower.` };
 
   const apiKey = deps.loadApiKey();
   const system = `You are distilling a screen-recorded lesson into a reusable "trick" — a workflow a small desktop agent will perform later on the SAME computer. You get sequential screenshots of the demonstration plus the teacher's spoken narration.
@@ -122,7 +127,7 @@ Respond with JSON only:
     });
     if (!res.ok) {
       deps.logEvent('trick-distill-failed', { status: res.status, body: (await res.text()).slice(0, 200) });
-      return { error: "my brain fumbled the lesson — ask him to teach it once more." };
+      return { error: `my brain fumbled the lesson — ask ${personName()} to teach it once more.` };
     }
     const spec = JSON.parse((await res.json()).choices[0].message.content);
     spec.name = name; // the name he gave it at teach time — models don't get to rename tricks
@@ -131,11 +136,11 @@ Respond with JSON only:
     if (!trick) return { error: 'I could not make sense of that lesson — ask him to show me again.' };
     return {
       trick,
-      summary: `Learned "${trick.name}" (${trick.steps.length} steps): ${trick.steps.map((s) => s.what).join(' → ')}${trick.steps.some((s) => s.risky) ? ' — some steps are risky and will need his ok when performed.' : ''}`,
+      summary: `Learned "${trick.name}" (${trick.steps.length} steps): ${trick.steps.map((s) => s.what).join(' → ')}${trick.steps.some((s) => s.risky) ? ` — some steps are risky and will need ${personName()}'s confirmation when performed.` : ''}`,
     };
   } catch (err) {
     deps.logEvent('trick-distill-failed', { error: err.message });
-    return { error: 'my brain fumbled the lesson — ask him to teach it once more.' };
+    return { error: `my brain fumbled the lesson — ask ${personName()} to teach it once more.` };
   }
 }
 
@@ -222,12 +227,26 @@ function tell(text) {
   deps.sendToDuck('quackers:trick-event', { text });
 }
 
+async function confirmRiskyAction(action, trick) {
+  const result = await dialog.showMessageBox({
+    type: 'warning',
+    title: 'Allow this Quackers action?',
+    message: `Allow Quackers to ${String(action.describe || action.item || action.action).slice(0, 140)}?`,
+    detail: `Trick: ${trick.name}\n\nThis action may send, delete, submit, purchase, close, or otherwise make a hard-to-undo change.`,
+    buttons: ['Cancel', 'Allow once'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+  return result.response === 1;
+}
+
 async function perform(name, guidance) {
   if (run.active) return 'already mid-trick — one at a time';
   const trick = deps.spine.findTrick(name);
-  if (!trick) return `you don't know a trick called "${name}". Your tricks are in your memory — offer to learn this one if he teaches it.`;
+  if (!trick) return `you don't know a trick called "${name}". Your tricks are in your memory — offer to learn this one if ${personName()} teaches it.`;
   if (!hasHands()) {
-    return "your hands aren't hooked up: performing tricks needs macOS Accessibility permission. Tell him, in one light sentence, that the little duck in the menu bar has a 'Give it hands' button that opens the right settings page (quick app restart after), and you'll happily do the trick then.";
+    return `your hands aren't hooked up: performing tricks needs macOS Accessibility permission. Tell ${personName()}, in one light sentence, that the little duck in the menu bar has a 'Give it hands' button that opens the right settings page (quick app restart after), and you'll happily do the trick then.`;
   }
 
   run.active = true;
@@ -242,7 +261,7 @@ async function perform(name, guidance) {
     run.active = false;
   });
 
-  return `Performing "${trick.name}" now — your body is doing it on screen. TRICK EVENT messages will arrive as you go; narrate ONLY what they say, briefly and with showmanship. Between events, stay quiet about progress — never invent state, never claim to be waiting for a confirmation that no TRICK EVENT announced. If one says a step needs his ok, ask him plainly and call confirm_trick_step with his answer.`;
+  return `Performing "${trick.name}" now — your body is doing it on screen. TRICK EVENT messages will arrive as you go; narrate ONLY what they say, briefly and with showmanship. A native macOS confirmation will appear before any risky action; never claim approval before that dialog is accepted.`;
 }
 
 async function performLoop(trick, guidance = '') {
@@ -251,10 +270,10 @@ async function performLoop(trick, guidance = '') {
   let lastCursor = null;
 
   for (let step = 0; step < MAX_STEPS && !run.abort; step++) {
-    // his hands always win: if he moved the mouse since our last action, stop
+    // The person's hands always win: if the mouse moved since our last action, stop.
     const cur = screen.getCursorScreenPoint();
     if (lastCursor && Math.hypot(cur.x - lastCursor.x, cur.y - lastCursor.y) > 80) {
-      tell('TRICK EVENT: he grabbed the mouse — you stopped instantly, mid-trick. His hands always win; say so cheerfully.');
+      tell(`TRICK EVENT: ${personName()} grabbed the mouse — you stopped instantly, mid-trick. Human hands always win; say so cheerfully.`);
       break;
     }
 
@@ -290,7 +309,7 @@ Respond with JSON only:
         type: 'text',
         text: JSON.stringify({
           trick: { name: trick.name, goal: trick.goal, steps: trick.steps, notes: trick.notes },
-          live_coaching_from_him: guidance || undefined, // his correction after a failed run — trust it over the plan
+          live_coaching: guidance || undefined,
           actions_so_far: history,
         }),
       },
@@ -321,13 +340,19 @@ Respond with JSON only:
 
     deps.logEvent('trick-step', { step, action: act.action, describe: act.describe, risky: act.risky });
 
+    const valid = validateAction(act, frame);
+    if (!valid.ok) {
+      tell(`TRICK EVENT: the proposed action failed a safety check (${valid.error}) — you stopped before touching anything.`);
+      break;
+    }
+
     // stuck detection: the same physical action twice in a row means the model
     // is flailing — stop honestly instead of clicking a wall forever
     // (coordinates are bucketed: a click 10px away from a failed click is the same click)
     const sig = `${act.action}:${Math.round((act.x || 0) / 24)},${Math.round((act.y || 0) / 24)}:${act.item || ''}${act.key || ''}`;
     const prev = history[history.length - 1];
     if (prev && prev.sig === sig) {
-      tell(`TRICK EVENT: you tried "${act.describe}" twice and the screen didn't change — the trick isn't landing today. Stop honestly and suggest he re-teach it or set the stage first.`);
+      tell(`TRICK EVENT: you tried "${act.describe}" twice and the screen didn't change — the trick isn't landing today. Stop honestly and suggest ${personName()} re-teach it or set the stage first.`);
       break;
     }
 
@@ -339,19 +364,16 @@ Respond with JSON only:
       return;
     }
     if (act.action === 'abort') {
-      tell(`TRICK EVENT: you stopped — the screen didn't match what you learned (${String(act.reason || '').slice(0, 100)}). Say so plainly and suggest he re-teach or set the stage.`);
+      tell(`TRICK EVENT: you stopped — the screen didn't match what you learned (${String(act.reason || '').slice(0, 100)}). Say so plainly and suggest ${personName()} re-teach or set the stage.`);
       break;
     }
 
-    if (act.risky) {
+    if (actionLooksRisky(act, trick, history)) {
       deps.sendToDuck('quackers:trick', { phase: 'confirm' });
-      tell(`TRICK EVENT: PAUSED — the next step is risky: "${act.describe}". Ask him out loud for a clear yes or no, then WAIT: do not call confirm_trick_step until HE has actually spoken an answer. Guessing or self-approving here is a betrayal of his trust.`);
-      const approved = await new Promise((resolve) => {
-        run.confirm = resolve;
-        setTimeout(() => resolveConfirm(false), 90000); // silence = no
-      });
+      tell(`TRICK EVENT: PAUSED — macOS is asking ${personName()} to allow the risky step "${act.describe}". Wait for the native dialog; never self-approve.`);
+      const approved = await confirmRiskyAction(act, trick);
       if (!approved || run.abort) {
-        tell('TRICK EVENT: he said no (or nothing) — you skipped the risky step and stopped the trick. Total respect, zero sulking.');
+        tell(`TRICK EVENT: ${personName()} did not allow the risky step — you skipped it and stopped the trick. Total respect, zero sulking.`);
         break;
       }
     }
@@ -367,8 +389,14 @@ Respond with JSON only:
           };
 
     // the duck's body flies to the spot and pecks — the signature visual
+    const cursorBeforeFlight = screen.getCursorScreenPoint();
     deps.sendToDuck('quackers:trick', { phase: 'action', x: pt.x, y: pt.y, type: act.action, label: act.describe });
     await new Promise((r) => setTimeout(r, 900)); // let the flight land
+    const cursorAfterFlight = screen.getCursorScreenPoint();
+    if (Math.hypot(cursorAfterFlight.x - cursorBeforeFlight.x, cursorAfterFlight.y - cursorBeforeFlight.y) > 40) {
+      tell(`TRICK EVENT: ${personName()} moved the mouse while you were flying in — you stopped before clicking. Human hands always win.`);
+      break;
+    }
 
     try {
       await actuate(act, pt);

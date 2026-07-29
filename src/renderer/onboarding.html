@@ -41,7 +41,8 @@
     .card canvas { display: block; margin: 0 auto 2px; image-rendering: pixelated; }
     .card .label { font-size: 12px; font-weight: 600; }
     .card .tag { font-size: 10px; opacity: 0.55; min-height: 12px; }
-    .namerow { display: flex; gap: 10px; align-items: center; }
+    .names { display: grid; gap: 9px; }
+    .namerow { display: grid; grid-template-columns: 112px 1fr; gap: 10px; align-items: center; }
     .namerow label { font-size: 13px; font-weight: 600; white-space: nowrap; }
     input {
       flex: 1;
@@ -54,6 +55,7 @@
       color: inherit;
     }
     input:focus { border-color: #f79e2d; }
+    .actions { display: flex; justify-content: flex-end; margin-top: 12px; }
     button {
       padding: 9px 20px;
       font: 600 14px -apple-system, sans-serif;
@@ -72,12 +74,20 @@
   <h1>🥚 Pick your Quacker</h1>
   <p class="sub">It hatches from an egg either way — this is who's inside. Choose once; it's yours for good.</p>
   <div class="grid" id="grid"></div>
-  <div class="namerow">
-    <label for="name">Name it:</label>
-    <input id="name" value="Quackers" maxlength="24" spellcheck="false" />
-    <button id="go">Hatch → </button>
+  <div class="names">
+    <div class="namerow">
+      <label for="duck-name">Duck's name:</label>
+      <input id="duck-name" value="Quackers" maxlength="24" spellcheck="false" />
+    </div>
+    <div class="namerow">
+      <label for="person-name">Your name:</label>
+      <input id="person-name" maxlength="60" autocomplete="name" placeholder="What should your duck call you?" />
+    </div>
   </div>
-  <p class="hint">click a duck · type a name · press Enter</p>
+  <div class="actions">
+    <button id="go" disabled>Hatch →</button>
+  </div>
+  <p class="hint">Stored in Quackers' local profile; included in API conversations.</p>
   <script src="skins.js"></script>
   <script src="onboarding.js"></script>
 </body>

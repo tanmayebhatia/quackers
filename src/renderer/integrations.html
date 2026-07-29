@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Coding buddy connections</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f8f4e9; --card:#fffaf0; --ink:#403a30; --muted:#817665; --line:#e4d8bd; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#24211c; --card:#332e25; --ink:#f1eadb; --muted:#aa9e8b; --line:#514836; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 26px; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, sans-serif; }
+    h1 { margin: 0; font: 750 21px/1.2 ui-rounded, -apple-system, sans-serif; }
+    .sub { margin: 5px 0 20px; color: var(--muted); }
+    .card { display: grid; grid-template-columns: 48px 1fr auto; gap: 13px; align-items: center; padding: 17px; margin: 12px 0; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+    .icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 13px; background:#e8bd43; color:#48380d; font-size: 22px; font-weight: 800; }
+    .icon.claude { background:#d99b72; color:#4c2b18; }
+    h2 { margin: 0; font-size: 16px; }
+    .detail { margin-top: 3px; color: var(--muted); font-size: 12.5px; }
+    .state { display: inline-block; margin-top: 7px; padding: 2px 7px; border-radius: 999px; background: rgba(101,145,105,.16); color: #5b8b61; font-size: 11px; font-weight: 700; }
+    .state.off { background: rgba(126,116,99,.12); color: var(--muted); }
+    button { border: 0; border-radius: 999px; padding: 8px 13px; background: #e6bd43; color:#43360f; font-weight: 750; cursor: pointer; min-width: 88px; }
+    button.remove { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+    button:disabled { opacity: .55; cursor: wait; }
+    .note { margin-top: 20px; padding: 12px 14px; border-left: 3px solid #e6bd43; background: var(--card); color: var(--muted); border-radius: 0 9px 9px 0; font-size: 12.5px; }
+    .error { color: #c7655c; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <h1>🐤 Your coding buddy</h1>
+  <p class="sub">Let coding tools tap Quackers on the shoulder when a run finishes or needs you. Events stay on this Mac.</p>
+  <div id="cards"></div>
+  <div class="note">Quackers merges its hook into your existing config and keeps a backup beside it. Codex will ask you to review and trust the new personal hook once; use <b>/hooks</b>. Claude Code can also show the installed hook with <b>/hooks</b>.</div>
+  <script src="integrations.js"></script>
+</body>
+</html>
