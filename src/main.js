@@ -655,8 +655,8 @@ function hasConfiguredApiKey() {
 }
 
 
-// The session config the mint is bound to. Rebuilt per mint so a pre-warmed
-// secret still snapshots current memory/ambient state (within its short life).
+// The session config the mint is bound to. Rebuilt for every explicit talk
+// action so voice always snapshots the current memory and ambient state.
 function buildRealtimeSessionConfig() {
   return {
     type: 'realtime',
@@ -679,9 +679,8 @@ function buildRealtimeSessionConfig() {
   };
 }
 
-// Mint an ephemeral client secret. Minting alone starts no call and bills no
-// audio — that only begins at the /realtime/calls SDP exchange — so this is safe
-// to pre-run on intent (see realtime-prewarm) to keep it off the tap-to-talk path.
+// Mint an ephemeral client secret only after the person explicitly starts a
+// conversation. Pointer movement and window visibility never initiate voice work.
 async function mintRealtimeSecret(key) {
   const mint = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
     method: 'POST',
@@ -696,24 +695,9 @@ async function mintRealtimeSecret(key) {
   return { value: secret.value };
 }
 
-// Pre-warm: hand the renderer a minted secret it can cache for a tap that's
-// seconds away. No mic prompt here — that stays on the intentional connect path.
-ipcMain.handle('realtime-prewarm', async () => {
-  const key = loadApiKey();
-  if (!key) return { error: 'no-voice' };
-  try {
-    return await mintRealtimeSecret(key);
-  } catch (err) {
-    return { error: `network error: ${err.message}` };
-  }
-});
-
-// arg is { offerSdp, secret? }. A pre-warmed secret skips the mint round trip;
-// a bare string is still accepted for safety. Legacy callers passed the SDP
-// string directly.
+// A bare SDP string remains accepted for compatibility with older renderers.
 ipcMain.handle('realtime-connect', async (_event, arg) => {
   const offerSdp = typeof arg === 'string' ? arg : arg && arg.offerSdp;
-  const preSecret = typeof arg === 'object' && arg ? arg.secret : null;
   const key = loadApiKey();
   if (!key) {
     return { error: 'no-voice' };
@@ -730,12 +714,9 @@ ipcMain.handle('realtime-connect', async (_event, arg) => {
   }
 
   try {
-    let secretValue = preSecret;
-    if (!secretValue) {
-      const minted = await mintRealtimeSecret(key);
-      if (minted.error) return { error: minted.error };
-      secretValue = minted.value;
-    }
+    const minted = await mintRealtimeSecret(key);
+    if (minted.error) return { error: minted.error };
+    const secretValue = minted.value;
 
     let sdpRes = await fetch(
       `https://api.openai.com/v1/realtime/calls?model=${REALTIME_MODEL}`,

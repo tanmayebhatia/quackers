@@ -50,7 +50,6 @@ contextBridge.exposeInMainWorld('quackers', {
   onClipRequest: (cb) => ipcRenderer.on('quackers:clip-request', cb),
   onVoiceGranted: (cb) => ipcRenderer.on('quackers:voice-granted', cb),
   realtimeConnect: (arg) => ipcRenderer.invoke('realtime-connect', arg),
-  realtimePrewarm: () => ipcRenderer.invoke('realtime-prewarm'),
   chatOpen: () => ipcRenderer.invoke('chat-open'),
   chatSend: (text) => ipcRenderer.invoke('chat-send', text),
   chatClose: () => ipcRenderer.invoke('chat-close'),

@@ -67,71 +67,6 @@ window.quackers.onTalkToggle(toggle);
 // double-clicking the duck toggles conversation (pet.js calls this)
 window.voiceToggle = toggle;
 
-// Pre-warm on intent. Two things dominate time-to-first-word and both can be
-// paid off BEFORE the tap: grabbing the mic (device init, no network/billing)
-// and minting the session secret (one OpenAI round trip; minting alone bills
-// nothing — audio only starts at the SDP exchange). When he's about to interact
-// (window focus, or the pointer moving over the duck), we warm both. A tap then
-// skips getUserMedia AND the mint, leaving just the SDP call before "hi".
-// Everything is released on blur so we never hold the mic hot in the background.
-let warmSecret = null; // { value, at } — a pre-minted session secret, single-use
-let lastWarmAt = 0;
-const WARM_SECRET_TTL_MS = 45000; // ephemeral secrets are short-lived; don't trust a stale one
-
-function maybeWarm() {
-  const now = performance.now();
-  if (now - lastWarmAt < 5000) return; // throttle — pointermove fires constantly
-  lastWarmAt = now;
-  warmMic();
-  prewarmSecret();
-}
-window.addEventListener('focus', maybeWarm);
-window.addEventListener('pointermove', maybeWarm, { passive: true });
-window.addEventListener('blur', coolOff);
-
-async function warmMic() {
-  if (active || connecting || micStream) return;
-  try {
-    if (!(await window.quackers.keyStatus())) return; // no key, no point holding the mic
-    // Never trigger the mic PERMISSION prompt just because the app got focus —
-    // only pre-open the mic if he's already granted it. The first-ever grant
-    // happens on the intentional tap-to-talk path, where a prompt makes sense.
-    try {
-      const perm = await navigator.permissions.query({ name: 'microphone' });
-      if (perm.state !== 'granted') return;
-    } catch {
-      return; // permissions API unavailable — skip warming; the cold path still works
-    }
-    micStream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
-    micTrack = micStream.getAudioTracks()[0];
-  } catch {
-    micStream = null;
-    micTrack = null;
-  }
-}
-
-async function prewarmSecret() {
-  if (active || connecting || warmSecret) return;
-  try {
-    if (!(await window.quackers.keyStatus())) return;
-    const r = await window.quackers.realtimePrewarm();
-    if (r && r.value) warmSecret = { value: r.value, at: performance.now() };
-  } catch {
-    warmSecret = null;
-  }
-}
-
-// Lost focus: drop the pre-warmed secret and release the mic if we're not in a
-// call. Holding the mic open in the background is a privacy smell, not a feature.
-function coolOff() {
-  warmSecret = null;
-  if (!active && !connecting && micStream) {
-    micStream.getTracks().forEach((t) => t.stop());
-    micStream = null;
-    micTrack = null;
-  }
-}
-
 const MIC_CONSTRAINTS = {
   audio: {
     echoCancellation: true,
@@ -184,17 +119,9 @@ async function startSession(isRedial = false) {
   connecting = true;
   window.duckAPI.setVoiceState('connecting');
 
-  // No key = no voice. Check FIRST, before touching the mic or hatching: a
-  // keyless tap used to fire a pointless macOS mic prompt AND crack the egg
-  // open on a session that could never connect — spending the one-time hatch on
-  // a dead conversation. keyStatus() is a permission-free boolean check.
-  // The mic may already be warm (grabbed on focus); if so getUserMedia is skipped.
-  const keyReady = window.quackers.keyStatus();
-  const micReady = micStream
-    ? Promise.resolve(micStream)
-    : navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS).catch((e) => ({ __err: e }));
-
-  const hasKey = await keyReady;
+  // No key = no voice. Check FIRST, before touching the mic or hatching.
+  // Microphone capture starts only after this explicit user-started talk action.
+  const hasKey = await window.quackers.keyStatus();
   if (!hasKey) {
     connecting = false;
     window.duckAPI.setVoiceState('idle');
@@ -204,12 +131,8 @@ async function startSession(isRedial = false) {
   }
 
   try {
-    const grabbed = await micReady;
-    if (grabbed && grabbed.__err) throw grabbed.__err;
-    if (!micStream) {
-      micStream = grabbed;
-      micTrack = micStream.getAudioTracks()[0];
-    }
+    micStream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+    micTrack = micStream.getAudioTracks()[0];
 
     pc = new RTCPeerConnection();
 
@@ -270,11 +193,7 @@ async function startSession(isRedial = false) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // consume the pre-minted secret if it's still fresh, else let main mint inline
-    const preSecret =
-      warmSecret && performance.now() - warmSecret.at < WARM_SECRET_TTL_MS ? warmSecret.value : null;
-    warmSecret = null; // single-use, whether or not it was fresh
-    const res = await window.quackers.realtimeConnect({ offerSdp: offer.sdp, secret: preSecret });
+    const res = await window.quackers.realtimeConnect({ offerSdp: offer.sdp });
     if (res.error === 'no-voice') {
       // no API key yet — turn it into the "give me a voice" moment
       stopSession();
@@ -349,6 +268,19 @@ function stopSession() {
   window.duckAPI.setFollow(false);
   window.duckAPI.setVoiceState('idle');
 }
+
+// Hiding the duck is also an explicit end to any live conversation. This is a
+// second line of defense beyond the talk toggle: no invisible Quackers process
+// may retain an audio track.
+function stopForHide() {
+  if (active || connecting || micStream) stopSession();
+}
+
+window.quackers.onDismiss(stopForHide);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopForHide();
+});
+window.addEventListener('beforeunload', stopForHide);
 
 function send(obj) {
   if (!dc || dc.readyState !== 'open') {
