@@ -107,6 +107,69 @@
     font-size:.88rem; color:var(--ink-soft); letter-spacing:.03em;
   }
 
+  /* lives — tablet illustration */
+  .lives-row{ display:flex; gap:32px; align-items:center; }
+  .lives-row > div:first-child{ flex:1; }
+  .tablet{
+    flex:0 0 150px; height:210px; border:3px solid var(--line); border-radius:18px;
+    background:#fffdf6; box-shadow:0 6px 16px rgba(150,100,40,.14);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
+  }
+  .tablet-duck{ font-size:3.2rem; line-height:1; }
+  .tablet-btn{
+    width:64px; height:64px; border-radius:50%;
+    background:linear-gradient(180deg,#ffb04a,var(--beak-deep));
+    box-shadow:0 4px 0 #b96f10, 0 8px 16px rgba(180,110,20,.3);
+  }
+  @media (max-width:560px){ .lives-row{ flex-direction:column; } .tablet{ flex-basis:auto; width:150px; } }
+
+  /* memory pills */
+  .pills{ display:flex; flex-direction:column; gap:12px; margin-top:1.4em; }
+  .pill{
+    font-family:"Pixelify Sans",monospace; font-size:.95rem;
+    background:#fffdf6; border:2px solid var(--line); border-radius:15px;
+    padding:.7rem 1rem; box-shadow:0 6px 16px rgba(150,100,40,.14);
+  }
+
+  /* pricing cards */
+  .cards{ display:flex; gap:20px; margin-top:1.6em; align-items:stretch; }
+  .card{
+    flex:1; background:#fffdf6; border:2px solid var(--line); border-radius:18px;
+    padding:28px; box-shadow:0 6px 16px rgba(150,100,40,.14);
+    display:flex; flex-direction:column;
+  }
+  .card-name{ font-family:"Pixelify Sans",monospace; font-weight:600; font-size:1.05rem; color:var(--ink-soft); }
+  .price{ font-family:"Pixelify Sans",monospace; font-weight:700; font-size:2.2rem; margin:.3rem 0 .6rem; }
+  .price .per{ font-size:.95rem; font-weight:400; color:var(--ink-soft); margin-left:.25rem; }
+  .card ul{ margin:0 0 1.4rem; padding-left:1.15rem; line-height:1.8; font-size:.98rem; }
+  .card-cta{ margin-top:auto; text-align:center; justify-content:center; font-size:1.02rem; padding:.85rem 1.2rem; }
+  @media (max-width:560px){ .cards{ flex-direction:column; } }
+  .promise{
+    text-align:center; color:var(--ink-soft); font-style:italic;
+    font-size:.98rem; margin-top:1.6em;
+  }
+
+  /* faq */
+  details{
+    background:#fffdf6; border:2px solid var(--line); border-radius:15px;
+    padding:.85rem 1.1rem; margin-bottom:12px; box-shadow:0 6px 16px rgba(150,100,40,.10);
+  }
+  summary{
+    font-family:"Pixelify Sans",monospace; font-weight:600; font-size:1rem;
+    cursor:pointer; letter-spacing:.01em;
+  }
+  details p{ margin:.8em 0 .2em; font-size:1rem; }
+
+  /* footer */
+  footer{ padding:24px 20px clamp(36px,6vh,56px); position:relative; z-index:2; }
+  .links{
+    display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:18px;
+    font-family:"Pixelify Sans",monospace; font-size:.85rem;
+  }
+  .links a{ color:var(--ink-soft); text-decoration:none; padding:.35rem .1rem; transition:color .15s ease, transform .15s ease; }
+  .links a:hover{ color:var(--beak-deep); transform:translateY(-1px); }
+  .links .sep{ width:4px;height:4px;border-radius:50%;background:var(--ink-soft);opacity:.4; }
+
   @media (prefers-reduced-motion:reduce){ *{animation-duration:.001s !important; transition-duration:.001s !important;} html{scroll-behavior:auto;} }
 </style>
 </head>
@@ -126,12 +189,101 @@
     <div class="under-cta">$149 for the first year · arriving this fall</div>
   </section>
 
-  <section id="lives"></section>
-  <section id="memory"></section>
-  <section id="gift"></section>
-  <section id="preorder"></section>
-  <section id="faq"></section>
+  <section id="lives">
+    <h2>he lives where you live.</h2>
+    <div class="lives-row">
+      <div>
+        <p>On your phone, or — our favorite — an old iPad propped on the kitchen counter. One giant button. Big, friendly type. Nothing to set up, nothing to configure.</p>
+        <p>Quackers is software: no gadget to buy, no box to plug in. The tablet you already have becomes the place he lives.</p>
+      </div>
+      <div class="tablet" aria-hidden="true">
+        <div class="tablet-duck">🐤</div>
+        <div class="tablet-btn"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="memory">
+    <h2>he remembers everything.</h2>
+    <p>Names, birthdays, the way you take your tea. What you told him last Tuesday. Quackers keeps a memory you can actually see — open it up, read what he knows, change it, or tell him to forget. When you say forget, he forgets.</p>
+    <p>He only ever looks or listens when you ask him to. Your conversations are yours.</p>
+    <div class="pills">
+      <div class="pill">🌱 “How are the tomatoes coming along?”</div>
+      <div class="pill">📅 “Isn’t the cardiologist Tuesday? I’ll remind you Monday.”</div>
+      <div class="pill">🧡 “Tell me again about the summer you met.”</div>
+    </div>
+  </section>
+
+  <section id="gift">
+    <h2>an unreasonably good gift.</h2>
+    <p>Quackers makes a lovely gift for someone you love but can’t call every day. You do a ten-minute setup — the family, a few photos, the stories behind them — and their duck arrives already knowing them. You pick his name together.</p>
+    <p>First thing he says: <em>“Your daughter told me about you. She says your tomatoes are famous.”</em></p>
+    <p>And if they’d like, he’ll pass a little hello back your way — <em>“she’s doing well; she told me about the county fair.”</em> Only ever with their say-so.</p>
+  </section>
+
+  <section id="preorder">
+    <h2>the first flock.</h2>
+    <p>A small first flock, arriving this fall. Preorder to reserve one.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-name">quackers</div>
+        <div class="price">$149<span class="per">/first year</span></div>
+        <ul>
+          <li>talks with you, every day</li>
+          <li>morning check-ins</li>
+          <li>a memory you can see and edit</li>
+          <li>phone + iPad</li>
+        </ul>
+        <a class="bring card-cta" id="buy-base" href="#">Preorder — $149</a>
+      </div>
+      <div class="card">
+        <div class="card-name">quackers + storybook</div>
+        <div class="price">$249<span class="per">/first year</span></div>
+        <ul>
+          <li>everything on the left</li>
+          <li>his year of conversations, gathered</li>
+          <li>a printed book of their stories</li>
+        </ul>
+        <a class="bring card-cta" id="buy-storybook" href="#">Preorder — $249</a>
+      </div>
+    </div>
+    <p class="promise">Charged today. Full refund any time before your duck arrives, no questions asked.</p>
+  </section>
+
+  <section id="faq">
+    <h2>questions, answered.</h2>
+    <details>
+      <summary>What do I need to run him?</summary>
+      <p>An iPhone or iPad. Quackers is an app — many families set up an old iPad on the kitchen counter as his full-time home. If you can charge it, he can live on it.</p>
+    </details>
+    <details>
+      <summary>Is this a robot?</summary>
+      <p>No — no hardware, ever. Quackers lives on a screen you already own.</p>
+    </details>
+    <details>
+      <summary>What about privacy?</summary>
+      <p>Quackers only listens when asked, shows you everything he remembers, and truly forgets what you tell him to forget. Nothing is shared with family unless the person he lives with says so. The engine behind him is open source — you can read exactly how he works.</p>
+    </details>
+    <details>
+      <summary>When does he arrive?</summary>
+      <p>The first flock lands this fall. Preorders reserve a spot; we’ll email you as your duck gets close.</p>
+    </details>
+    <details>
+      <summary>What if I change my mind?</summary>
+      <p>Charged today. Full refund any time before your duck arrives, no questions asked. Email us and it’s done.</p>
+    </details>
+  </section>
 </main>
+
+<footer>
+  <div class="links">
+    <a href="/">made by the flock at helloquackers.com</a>
+    <span class="sep"></span>
+    <a href="https://github.com/tanmayebhatia/quackers" target="_blank" rel="noopener">source on GitHub</a>
+    <span class="sep"></span>
+    <a href="https://x.com/tanmaye_bhatia" target="_blank" rel="noopener">follow the hatching →</a>
+  </div>
+</footer>
 
 <script>
 /* ====================================================================
