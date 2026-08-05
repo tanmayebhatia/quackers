@@ -341,6 +341,14 @@ const qkReady = (v) => v && !v.startsWith('PASTE_');
   if (still) { frame(); }
   else { (function loop(){ frame(); requestAnimationFrame(loop); })(); }
 })();
+
+/* ---- preorder buttons → Stripe payment links (mailto until pasted) ---- */
+for (const [id, link] of [['buy-base', QK.stripeBase], ['buy-storybook', QK.stripeStorybook]]) {
+  const a = document.getElementById(id);
+  if (qkReady(link)) a.href = link;
+  else { a.href = 'mailto:tanmayebhatia@gmail.com?subject=Quackers%20preorder'; a.dataset.fallback = '1'; }
+  a.addEventListener('click', () => { if (typeof fbq === 'function') fbq('track', 'InitiateCheckout'); });
+}
 </script>
 </body>
 </html>
