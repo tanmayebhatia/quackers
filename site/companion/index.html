@@ -349,6 +349,24 @@ for (const [id, link] of [['buy-base', QK.stripeBase], ['buy-storybook', QK.stri
   else { a.href = 'mailto:tanmayebhatia@gmail.com?subject=Quackers%20preorder'; a.dataset.fallback = '1'; }
   a.addEventListener('click', () => { if (typeof fbq === 'function') fbq('track', 'InitiateCheckout'); });
 }
+
+/* ---- analytics — inert until real IDs are pasted into QK ---- */
+if (qkReady(QK.metaPixelId)) {
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+  document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', QK.metaPixelId);
+  fbq('track', 'PageView');
+  if (location.pathname.includes('/thanks')) fbq('track', 'Purchase', {value: 149, currency: 'USD'});
+}
+if (qkReady(QK.goatcounter)) {
+  const s = document.createElement('script');
+  s.dataset.goatcounter = `https://${QK.goatcounter}.goatcounter.com/count`;
+  s.async = true; s.src = '//gc.zgo.at/count.js';
+  document.body.appendChild(s);
+}
 </script>
 </body>
 </html>
